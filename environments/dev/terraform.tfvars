@@ -1,0 +1,6 @@
+region        = "us-east-1"
+project_name  = "realtime-data-platform"
+environment   = "dev"
+vpc_cidr      = "10.0.0.0/16"
+bucket_name   = "realtime-data-platform-dev-raw"
+bucket_prefix = "raw/"
