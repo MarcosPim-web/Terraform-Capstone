@@ -8,6 +8,13 @@ locals {
   }
 }
 
+resource "aws_s3_bucket" "data_lake_raw" {
+  bucket        = "${local.resource_prefix}-raw"
+  force_destroy = true
+
+  tags = local.common_tags
+}
+
 # Los recursos de la plataforma de datos se agregarán aquí.
 # Ejemplos futuros:
 # - AWS Kinesis Data Streams
