@@ -24,11 +24,15 @@ Terraform will perform the following actions:
               + Statement = [
                   + {
                       + Action   = [
-                          + "ec2:Describe*",
-                          + "s3:Get*",
-                          + "s3:List*",
-                          + "iam:Get*",
-                          + "iam:List*",
+                          + "ec2:DescribeVpcs",
+                          + "ec2:DescribeSubnets",
+                          + "ec2:DescribeRouteTables",
+                          + "ec2:DescribeVpcEndpoints",
+                          + "s3:GetBucketLocation",
+                          + "s3:GetBucketPolicy",
+                          + "s3:ListBucket",
+                          + "iam:GetRole",
+                          + "iam:ListAttachedRolePolicies",
                         ]
                       + Effect   = "Allow"
                       + Resource = "*"
