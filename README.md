@@ -220,3 +220,35 @@ El archivo `.gitignore` excluye:
 
 Los archivos `.terraform.lock.hcl` sí se incluyen para mantener versiones consistentes de los providers.
 ```
+
+## Prueba de ingesta en tiempo real
+
+Se enviaron 100 eventos de prueba al Kinesis Data Stream mediante el script:
+
+```powershell
+.\scripts\send_test_events.ps1
+
+Los eventos fueron procesados por Amazon Data Firehose y almacenados en el bucket S3 de la capa Raw/Bronze.
+
+Ruta generada:
+
+s3://realtime-data-platform-dev-raw/ingesta/year=2026/month=08/day=06/
+
+Comando de verificación:
+
+aws s3 ls s3://realtime-data-platform-dev-raw/ingesta/ --recursive
+
+Resultado:
+
+Resultado:
+
+```text
+2026-08-06 00:25:37       2373 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-24-36-f8da30c5-d6e5-4bbf-a50b-84eb82823bf7
+2026-08-06 00:25:39       3346 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-24-38-bb3e38fb-35d4-497a-be93-abcc7cb02644
+2026-08-06 00:26:39       2649 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-25-31-96dd0d4d-7858-40d4-8bd0-e40184f3fc8c
+2026-08-06 00:26:43       3070 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-25-38-0deaa26a-e3b9-4a84-b24e-d2910e37ede0
+2026-08-06 00:27:39        838 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-26-34-eccdb37d-ae43-4783-8302-94b59672b319
+2026-08-06 00:27:44       1674 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-26-36-55eb8a40-b1a6-4ad9-a1f3-8faa08fcff37
+```
+
+![Evidencia de archivos generados por Firehose](docs/evidencia-firehose-s3.png)
