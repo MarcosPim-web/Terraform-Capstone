@@ -28,7 +28,7 @@ resource "aws_iam_role" "data_processing" {
 
 resource "aws_iam_policy" "data_processing_s3" {
   name        = "${var.environment}-data-processing-s3-policy"
-  description = "Permite acceso limitado al prefijo configurado en S3"
+  description = "Permite leer y escribir objetos dentro del prefijo configurado en S3"
 
   policy = jsonencode({
     Version = "2012-10-17"

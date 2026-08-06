@@ -1,254 +1,263 @@
-```markdown
-# Checkpoint de Infraestructura Base con Terraform y AWS
+# Infraestructura de datos en AWS con Terraform
 
-Este repositorio contiene la infraestructura base de una plataforma de datos en AWS, organizada mediante módulos reutilizables de Terraform.
+Este repositorio contiene el trabajo realizado para las preentregas 1 y 2 del curso de Data Engineering.
 
-El objetivo de esta primera pre-entrega es preparar una base segura y modular para futuros servicios de ingesta y procesamiento de datos, como Amazon Kinesis, AWS Lambda y Amazon Managed Service for Apache Flink.
+El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose.
 
-## Arquitectura implementada
+## Recursos implementados
 
-El proyecto crea:
+### Preentrega 1: infraestructura base
 
-- Una VPC dedicada para datos.
-- Dos subredes privadas en diferentes zonas de disponibilidad.
-- Una tabla de rutas privada.
-- Un S3 Gateway Endpoint asociado a la red privada.
-- Un rol IAM para futuros servicios de procesamiento.
-- Una política IAM con acceso limitado a un prefijo de S3.
-- Un rol IAM de auditoría de solo lectura.
-- Un backend remoto de Terraform en Amazon S3.
-- Una tabla DynamoDB para el bloqueo del estado.
+* Backend remoto de Terraform en Amazon S3.
+* Tabla de DynamoDB para el bloqueo del estado.
+* VPC dedicada para la plataforma de datos.
+* Dos subredes privadas en diferentes zonas de disponibilidad.
+* Tabla de rutas privada.
+* Gateway Endpoint de S3.
+* Rol IAM para servicios de procesamiento de datos.
+* Política IAM con acceso limitado a un prefijo de S3.
+* Rol IAM de auditoría con permisos de solo lectura.
+
+### Preentrega 2: ingesta en tiempo real
+
+* Amazon Kinesis Data Stream para recibir eventos.
+* Amazon Data Firehose para entregar los datos en S3.
+* Roles y políticas IAM necesarios para conectar los servicios.
+* Alarmas de Amazon CloudWatch para monitorear el flujo.
+* Script de PowerShell para enviar eventos de prueba.
+* Evidencia de los archivos generados en la capa Raw/Bronze.
 
 ## Estructura del proyecto
 
-~~~text
+```text
 Terraform-Scaffold/
-├── bootstrap/
-│   ├── main.tf
-│   ├── outputs.tf
-│   ├── provider.tf
-│   ├── terraform.tfvars
-│   └── variables.tf
-│
-├── environments/
-│   └── dev/
-│       ├── backend.tf
-│       ├── main.tf
-│       ├── outputs.tf
-│       ├── provider.tf
-│       ├── terraform.tfvars
-│       └── variables.tf
-│
-├── modules/
-│   ├── identity/
-│   │   ├── main.tf
-│   │   ├── outputs.tf
-│   │   └── variables.tf
-│   │
-│   └── network/
-│       ├── main.tf
-│       ├── outputs.tf
-│       └── variables.tf
-│
-├── .gitignore
-├── PLAN_OUTPUT.md
-└── README.md
-~~~
+|-- .gitignore
+|-- PLAN_OUTPUT.md
+|-- README.md
+|
+|-- bootstrap/
+|   |-- .terraform.lock.hcl
+|   |-- main.tf
+|   |-- outputs.tf
+|   |-- provider.tf
+|   |-- terraform.tfvars
+|   `-- variables.tf
+|
+|-- environments/
+|   `-- dev/
+|       |-- .terraform.lock.hcl
+|       |-- backend.tf
+|       |-- main.tf
+|       |-- outputs.tf
+|       |-- provider.tf
+|       |-- terraform.tfvars
+|       `-- variables.tf
+|
+|-- modules/
+|   |-- identity/
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |   `-- variables.tf
+|   |
+|   |-- kinesis/
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |   `-- variables.tf
+|   |
+|   `-- network/
+|       |-- main.tf
+|       |-- outputs.tf
+|       `-- variables.tf
+|
+|-- docs/
+|   `-- evidencia-firehose-s3.png
+|
+`-- scripts/
+    `-- send_test_events.ps1
+```
 
-## Módulos
+## Organización
 
-### Network
+### `bootstrap`
 
-El módulo `network` crea:
+Contiene los recursos necesarios para almacenar el estado de Terraform de manera remota:
 
-- Una VPC con CIDR configurable.
-- Dos subredes privadas.
-- Una tabla de rutas privada.
-- Las asociaciones entre las subredes y la tabla de rutas.
-- Un S3 Gateway Endpoint.
+* Bucket de S3 para el archivo de estado.
+* Cifrado del bucket.
+* Versionado del estado.
+* Tabla de DynamoDB para evitar modificaciones simultáneas.
 
-Las subredes no asignan direcciones IP públicas automáticamente y no cuentan con rutas directas hacia Internet.
+Esta configuración se ejecuta por separado porque el backend debe existir antes de desplegar el resto de la infraestructura.
 
-### Identity
+### `environments/dev`
 
-El módulo `identity` crea:
+Es el punto de entrada del entorno de desarrollo.
 
-- Un rol para servicios de procesamiento de datos.
-- Una política limitada a las siguientes acciones:
-  - `s3:ListBucket`
-  - `s3:GetObject`
-  - `s3:PutObject`
-- Un rol de auditoría con permisos de solo lectura.
+Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad e ingesta.
 
-El acceso del rol de procesamiento se limita al prefijo `raw/` del bucket configurado.
+### `modules/network`
 
-## Backend remoto
+Crea la infraestructura de red:
 
-El estado de Terraform se almacena en un bucket S3 con cifrado del lado del servidor mediante AES-256.
+* VPC.
+* Subredes privadas.
+* Tabla de rutas.
+* Asociaciones de las subredes.
+* Gateway Endpoint para S3.
 
-También se utiliza una tabla DynamoDB para evitar modificaciones simultáneas del estado durante el trabajo en equipo.
+Las subredes no asignan direcciones IP públicas automáticamente.
 
-Los recursos del backend se crean desde la carpeta:
+### `modules/identity`
 
-~~~text
-bootstrap/
-~~~
+Crea los permisos principales del proyecto:
+
+* Rol para servicios de procesamiento.
+* Política de acceso limitado al bucket de datos.
+* Rol de auditoría de solo lectura.
+
+El acceso de procesamiento se restringe al prefijo configurado dentro del bucket.
+
+### `modules/kinesis`
+
+Crea los recursos de ingesta en tiempo real:
+
+* Kinesis Data Stream.
+* Data Firehose.
+* Roles y políticas IAM utilizados por Firehose.
+* Configuración de entrega hacia Amazon S3.
+* Alarmas de CloudWatch.
+
+Los datos entregados por Firehose se almacenan utilizando una estructura de carpetas basada en la fecha de procesamiento.
 
 ## Requisitos
 
-Para utilizar este proyecto se necesita:
+Para ejecutar el proyecto se necesita:
 
-- Terraform 1.1.0 o superior.
-- AWS CLI v2.
-- Git.
-- Una cuenta de AWS.
-- Credenciales de AWS configuradas mediante `aws configure`.
+* Terraform.
+* AWS CLI v2.
+* Git.
+* Una cuenta de AWS.
+* Credenciales configuradas localmente mediante `aws configure`.
 
-Las credenciales no deben almacenarse dentro del repositorio.
+Las credenciales de AWS no se almacenan dentro del repositorio.
 
 ## Despliegue del backend
 
 Ingresar en la carpeta `bootstrap`:
 
-~~~powershell
+```powershell
 cd bootstrap
-~~~
+```
 
 Inicializar Terraform:
 
-~~~powershell
+```powershell
 terraform init
-~~~
+```
 
 Validar la configuración:
 
-~~~powershell
+```powershell
 terraform validate
-~~~
+```
 
-Revisar el plan:
+Revisar los cambios:
 
-~~~powershell
+```powershell
 terraform plan
-~~~
+```
 
-Crear el bucket S3 y la tabla DynamoDB:
+Crear los recursos:
 
-~~~powershell
+```powershell
 terraform apply
-~~~
+```
 
 ## Despliegue del entorno de desarrollo
 
 Ingresar en la carpeta del entorno:
 
-~~~powershell
+```powershell
 cd environments\dev
-~~~
+```
 
-Inicializar Terraform:
+Inicializar Terraform y conectar el backend remoto:
 
-~~~powershell
+```powershell
 terraform init
-~~~
+```
 
 Validar la configuración:
 
-~~~powershell
+```powershell
 terraform validate
-~~~
-
-Revisar el plan:
-
-~~~powershell
-terraform plan
-~~~
-
-Desplegar los recursos:
-
-~~~powershell
-terraform apply
-~~~
-
-## Variables del entorno dev
-
-| Variable | Descripción | Valor de ejemplo |
-| --- | --- | --- |
-| `region` | Región de AWS | `us-east-1` |
-| `project_name` | Nombre del proyecto | `realtime-data-platform` |
-| `environment` | Entorno de despliegue | `dev` |
-| `vpc_cidr` | Rango CIDR de la VPC | `10.0.0.0/16` |
-| `bucket_name` | Bucket usado por el rol de procesamiento | `realtime-data-platform-dev-raw` |
-| `bucket_prefix` | Prefijo autorizado dentro del bucket | `raw/` |
-
-## Outputs
-
-El entorno devuelve:
-
-- `vpc_id`
-- `private_subnet_ids`
-- `data_processing_role_arn`
-- `audit_read_only_role_arn`
-
-Estos valores podrán utilizarse como entradas en futuros módulos de la plataforma.
-
-## Validación
-
-El código puede validarse desde `environments/dev` con:
-
-~~~powershell
-terraform fmt -recursive
-terraform validate
-terraform plan
-~~~
-
-El resultado de un plan exitoso se encuentra documentado en:
-
-~~~text
-PLAN_OUTPUT.md
-~~~
-
-## Seguridad y control de versiones
-
-El archivo `.gitignore` excluye:
-
-- Carpetas `.terraform/`.
-- Archivos `terraform.tfstate`.
-- Copias de respaldo del estado.
-- Archivos temporales de Terraform.
-- Credenciales y secretos.
-
-Los archivos `.terraform.lock.hcl` sí se incluyen para mantener versiones consistentes de los providers.
 ```
 
-## Prueba de ingesta en tiempo real
+Revisar los cambios:
 
-Se enviaron 100 eventos de prueba al Kinesis Data Stream mediante el script:
+```powershell
+terraform plan
+```
+
+Desplegar la infraestructura:
+
+```powershell
+terraform apply
+```
+
+## Prueba de ingesta
+
+Para comprobar el funcionamiento del flujo se utilizó el script:
 
 ```powershell
 .\scripts\send_test_events.ps1
-
-Los eventos fueron procesados por Amazon Data Firehose y almacenados en el bucket S3 de la capa Raw/Bronze.
-
-Ruta generada:
-
-s3://realtime-data-platform-dev-raw/ingesta/year=2026/month=08/day=06/
-
-Comando de verificación:
-
-aws s3 ls s3://realtime-data-platform-dev-raw/ingesta/ --recursive
-
-Resultado:
-
-Resultado:
-
-```text
-2026-08-06 00:25:37       2373 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-24-36-f8da30c5-d6e5-4bbf-a50b-84eb82823bf7
-2026-08-06 00:25:39       3346 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-24-38-bb3e38fb-35d4-497a-be93-abcc7cb02644
-2026-08-06 00:26:39       2649 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-25-31-96dd0d4d-7858-40d4-8bd0-e40184f3fc8c
-2026-08-06 00:26:43       3070 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-25-38-0deaa26a-e3b9-4a84-b24e-d2910e37ede0
-2026-08-06 00:27:39        838 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-26-34-eccdb37d-ae43-4783-8302-94b59672b319
-2026-08-06 00:27:44       1674 ingesta/year=2026/month=08/day=06/realtime-data-platform-dev-firehose-1-2026-08-06-03-26-36-55eb8a40-b1a6-4ad9-a1f3-8faa08fcff37
 ```
 
+El script envía 100 eventos de prueba al Kinesis Data Stream.
+
+Los eventos son recibidos por Data Firehose y almacenados en el bucket S3 de la capa Raw/Bronze.
+
+La ruta generada durante la prueba fue:
+
+```text
+s3://realtime-data-platform-dev-raw/ingesta/year=2026/month=08/day=06/
+```
+
+Los archivos pueden comprobarse mediante AWS CLI:
+
+```powershell
+aws s3 ls s3://realtime-data-platform-dev-raw/ingesta/ --recursive
+```
+
+Evidencia del resultado:
+
 ![Evidencia de archivos generados por Firehose](docs/evidencia-firehose-s3.png)
+
+## Validación del código
+
+Desde la raíz del repositorio se puede aplicar formato a todos los archivos:
+
+```powershell
+terraform fmt -recursive
+```
+
+Luego, desde cada configuración de Terraform, se puede ejecutar:
+
+```powershell
+terraform validate
+terraform plan
+```
+
+El archivo `PLAN_OUTPUT.md` contiene el resultado de uno de los planes realizados durante el desarrollo.
+
+## Seguridad y control de versiones
+
+El archivo `.gitignore` evita subir al repositorio:
+
+* Carpetas `.terraform`.
+* Archivos `terraform.tfstate`.
+* Copias de respaldo del estado.
+* Archivos temporales.
+* Credenciales y secretos.
+
+Los archivos `.terraform.lock.hcl` sí se incluyen para mantener versiones consistentes de los providers.

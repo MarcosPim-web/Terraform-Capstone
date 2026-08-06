@@ -15,11 +15,11 @@ variable "shard_count" {
 }
 
 variable "raw_bucket_arn" {
-  description = "ARN del bucket S3 de la capa raw"
+  description = "ARN del bucket S3 de la capa Raw/Bronze"
   type        = string
 }
 
 variable "raw_bucket_name" {
-  description = "Nombre del bucket S3 de la capa raw"
+  description = "Nombre del bucket S3 de la capa Raw/Bronze"
   type        = string
 }
