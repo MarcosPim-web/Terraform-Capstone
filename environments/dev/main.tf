@@ -13,3 +13,25 @@ module "identity" {
   bucket_name   = var.bucket_name
   bucket_prefix = var.bucket_prefix
 }
+
+resource "aws_s3_bucket" "raw" {
+  bucket        = var.bucket_name
+  force_destroy = true
+
+  tags = {
+    Name        = var.bucket_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+    Layer       = "Bronze"
+  }
+}
+
+module "kinesis" {
+  source = "../../modules/kinesis"
+
+  environment     = var.environment
+  project_name    = var.project_name
+  shard_count     = 2
+  raw_bucket_name = aws_s3_bucket.raw.bucket
+  raw_bucket_arn  = aws_s3_bucket.raw.arn
+}

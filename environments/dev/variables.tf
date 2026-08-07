@@ -19,11 +19,11 @@ variable "vpc_cidr" {
 }
 
 variable "bucket_name" {
-  description = "Nombre del bucket S3 al que accederá el rol de procesamiento"
+  description = "Nombre del bucket S3 utilizado para almacenar los datos de la capa Raw/Bronze"
   type        = string
 }
 
 variable "bucket_prefix" {
-  description = "Prefijo permitido dentro del bucket S3"
+  description = "Prefijo del bucket al que puede acceder el rol de procesamiento"
   type        = string
 }

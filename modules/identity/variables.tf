@@ -4,11 +4,11 @@ variable "environment" {
 }
 
 variable "bucket_name" {
-  description = "Nombre del bucket S3 al que accederá el rol de procesamiento"
+  description = "Nombre del bucket S3 utilizado por el rol de procesamiento"
   type        = string
 }
 
 variable "bucket_prefix" {
-  description = "Prefijo específico dentro del bucket S3"
+  description = "Prefijo del bucket al que puede acceder el rol de procesamiento"
   type        = string
 }
