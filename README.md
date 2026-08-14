@@ -407,7 +407,7 @@ El archivo:
 producer/producer.py
 ```
 
-genera continuamente eventos JSON con los siguientes campos:
+genera eventos JSON simulados cada 2 segundos con los siguientes campos:
 
 * `sensor_id`
 * `temperature`
@@ -440,6 +440,8 @@ En otra terminal:
 ```powershell
 python producer/producer.py
 ```
+
+El productor utiliza un intervalo de 2 segundos entre eventos para evitar una generación excesiva de mensajes durante las pruebas locales y permitir observar el flujo de datos de forma controlada.
 
 Durante las pruebas se verificó correctamente la llegada de los eventos al tópico `urban_sensors`.
 
