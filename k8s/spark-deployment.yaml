@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-streaming
+  namespace: urban-data
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: spark-streaming
+
+  template:
+    metadata:
+      labels:
+        app: spark-streaming
+
+    spec:
+      containers:
+        - name: spark-streaming
+          image: spark:4.0.1-python3
+
+          envFrom:
+            - configMapRef:
+                name: spark-config
+
+          command:
+            - /bin/bash
+            - -c
+
+          args:
+            - |
+              /opt/spark/bin/spark-submit \
+                --conf spark.jars.ivy=/tmp/.ivy2 \
+                --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.1 \
+                /opt/spark/app/streaming_job.py
+
+          volumeMounts:
+            - name: spark-job-volume
+              mountPath: /opt/spark/app/streaming_job.py
+              subPath: streaming_job.py
+
+      volumes:
+        - name: spark-job-volume
+          configMap:
+            name: spark-job-script
