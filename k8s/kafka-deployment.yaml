@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: urban-data
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: kafka
+
+  template:
+    metadata:
+      labels:
+        app: kafka
+
+    spec:
+      containers:
+        - name: kafka
+          image: bitnamilegacy/kafka:3.3.1-debian-11-r9
+
+          ports:
+            - containerPort: 9092
+
+          envFrom:
+            - configMapRef:
+                name: kafka-config

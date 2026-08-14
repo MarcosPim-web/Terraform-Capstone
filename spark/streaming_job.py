@@ -1,0 +1,93 @@
+import os
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import avg, col, from_json, to_timestamp, window
+from pyspark.sql.types import (
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+)
+
+
+KAFKA_BOOTSTRAP_SERVERS = os.getenv(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "kafka-service:9092",
+)
+
+KAFKA_TOPIC = os.getenv(
+    "KAFKA_TOPIC",
+    "urban_sensors",
+)
+
+SPARK_APP_NAME = os.getenv(
+    "SPARK_APP_NAME",
+    "urban-sensors-streaming",
+)
+
+
+spark = (
+    SparkSession.builder
+    .appName(SPARK_APP_NAME)
+    .getOrCreate()
+)
+
+spark.sparkContext.setLogLevel("WARN")
+
+
+schema = StructType([
+    StructField("sensor_id", StringType(), True),
+    StructField("temperature", DoubleType(), True),
+    StructField("humidity", DoubleType(), True),
+    StructField("air_quality_index", IntegerType(), True),
+    StructField("timestamp", StringType(), True),
+])
+
+
+raw_stream = (
+    spark.readStream
+    .format("kafka")
+    .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
+    .option("subscribe", KAFKA_TOPIC)
+    .option("startingOffsets", "latest")
+    .load()
+)
+
+
+parsed_stream = (
+    raw_stream
+    .selectExpr("CAST(value AS STRING) AS json_value")
+    .select(from_json(col("json_value"), schema).alias("data"))
+    .select("data.*")
+    .withColumn(
+        "event_time",
+        to_timestamp(col("timestamp"))
+    )
+)
+
+
+aggregated_stream = (
+    parsed_stream
+    .withWatermark("event_time", "1 minute")
+    .groupBy(
+        window(col("event_time"), "1 minute"),
+        col("sensor_id"),
+    )
+    .agg(
+        avg("temperature").alias("avg_temperature"),
+        avg("air_quality_index").alias("avg_air_quality_index"),
+    )
+)
+
+
+query = (
+    aggregated_stream.writeStream
+    .outputMode("update")
+    .format("console")
+    .option("truncate", "false")
+    .start()
+)
+
+
+query.awaitTermination()
