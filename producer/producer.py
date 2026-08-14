@@ -23,3 +23,4 @@ while True:
     producer.send("urban_sensors", value=sensor_data)
 
     print(f"Enviado: {sensor_data}")
+    time.sleep(2)
