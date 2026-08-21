@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.dataops</groupId>
+    <artifactId>realtime-flink-processing</artifactId>
+    <version>1.0.0</version>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <flink.version>1.20.0</flink.version>
+        <kinesis.connector.version>5.0.0-1.20</kinesis.connector.version>
+
+        <maven.compiler.release>11</maven.compiler.release>
+    </properties>
+
+    <dependencies>
+
+        <!-- API principal de Apache Flink -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Permite ejecutar el job -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Permite leer propiedades configuradas por Terraform en Managed Flink -->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-kinesisanalytics-runtime</artifactId>
+            <version>1.2.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Conector para consumir Amazon Kinesis Data Streams -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-kinesis</artifactId>
+            <version>${kinesis.connector.version}</version>
+        </dependency>
+
+        <!-- Procesamiento de los eventos JSON -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <!-- Compila el proyecto -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>11</release>
+                </configuration>
+            </plugin>
+
+            <!-- Genera un único JAR con las dependencias necesarias -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.0</version>
+
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+
+                        <configuration>
+
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+
+                            <transformers>
+
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.dataops.flink.SensorStreamingJob</mainClass>
+                                </transformer>
+
+                            </transformers>
+
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

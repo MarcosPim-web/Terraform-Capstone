@@ -44,3 +44,9 @@ terraform.rc
 # planout
 
 .venv/
+
+# VS Code local settings
+.vscode/
+
+# Maven build artifacts
+flink/target/

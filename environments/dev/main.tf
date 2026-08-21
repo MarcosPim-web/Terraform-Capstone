@@ -35,3 +35,14 @@ module "kinesis" {
   raw_bucket_name = aws_s3_bucket.raw.bucket
   raw_bucket_arn  = aws_s3_bucket.raw.arn
 }
+
+module "flink" {
+  source = "../../modules/flink"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  region             = var.region
+  kinesis_stream_arn = module.kinesis.kinesis_stream_arn
+
+  jar_path = "${path.root}/../../flink/target/realtime-flink-processing-1.0.0.jar"
+}
