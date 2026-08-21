@@ -134,9 +134,9 @@ Terraform-Scaffold/
 |   |-- evidencia-kafka.png
 |   |-- evidencia-kafka-producer.png
 |   |-- evidencia-spark-streaming.png
-|   |-- Evidencia_Productor_Kinesis.png
-|   |-- Evidencia_WINDOW_RESULT.png
-|   |-- Evidencia_Checkpoints_Flink.png
+|   |-- evidencia-kinesis-producer.png
+|   |-- evidencia-flink-window-results.png
+|   |-- evidencia-flink-checkpoints.png
 |   |-- evidencia-flink-aws.png
 |   |-- evidencia-kinesis-aws.png
 |   `-- evidencia-flink-jar-s3.png
@@ -943,7 +943,7 @@ El productor PowerShell genera eventos JSON de sensores urbanos y los envía dir
 
 Durante la prueba se enviaron correctamente 180 eventos.
 
-![Evidencia del productor hacia Kinesis](docs/Evidencia_Productor_Kinesis.png)
+![Evidencia del productor hacia Kinesis](docs/evidencia-kinesis-producer.png)
 
 #### Procesamiento de ventanas con Flink
 
@@ -951,7 +951,7 @@ Los logs de CloudWatch muestran los resultados generados por Flink para múltipl
 
 Cada resultado incluye la cantidad de eventos procesados y los promedios de temperatura, humedad y calidad del aire.
 
-![Evidencia de ventanas de Flink](docs/Evidencia_WINDOW_RESULT.png)
+![Evidencia de ventanas de Flink](docs/evidencia-flink-window-results.png)
 
 #### Checkpoints de Flink
 
@@ -959,7 +959,7 @@ Durante la ejecución se verificó que los checkpoints se completaran periódica
 
 La evidencia muestra múltiples checkpoints finalizados correctamente junto con su tamaño y duración.
 
-![Evidencia de checkpoints de Flink](docs/Evidencia_Checkpoints_Flink.png)
+![Evidencia de checkpoints de Flink](docs/evidencia-flink-checkpoints.png)
 
 #### Aplicación AWS Managed Service for Apache Flink
 
