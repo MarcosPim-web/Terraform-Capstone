@@ -1,8 +1,8 @@
 # Infraestructura de datos en AWS con Terraform
 
-Este repositorio contiene el trabajo realizado para las preentregas 1, 2 y 3 del curso de Data Engineering.
+Este repositorio contiene el trabajo realizado para las preentregas 1, 2, 3 y 4 del curso de Data Engineering.
 
-El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose. La tercera incorpora un entorno local de procesamiento distribuido utilizando Kubernetes, Apache Kafka y Apache Spark Structured Streaming.
+El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose. La tercera incorpora un entorno local de procesamiento distribuido utilizando Kubernetes, Apache Kafka y Apache Spark Structured Streaming. La cuarta incorpora procesamiento stateful en AWS mediante Amazon Kinesis Data Streams y AWS Managed Service for Apache Flink.
 
 ## Recursos implementados
 
@@ -40,6 +40,25 @@ El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La 
 * Procesamiento de eventos mediante ventanas de 1 minuto.
 * Cálculo del promedio de temperatura y calidad del aire por `sensor_id`.
 
+### Preentrega 4: procesamiento stateful con Apache Flink
+
+* AWS Managed Service for Apache Flink con runtime Apache Flink 1.20.
+* Aplicación Java empaquetada mediante Maven.
+* Consumo de eventos desde Amazon Kinesis Data Streams.
+* Deserialización de eventos JSON de sensores urbanos.
+* Procesamiento utilizando Event Time.
+* Watermarks con una tolerancia de 10 segundos para eventos fuera de orden.
+* Detección de fuentes inactivas mediante idleness de 30 segundos.
+* Agrupación de eventos por `sensor_id`.
+* Ventanas Tumbling Event Time de 1 minuto.
+* Cálculo de cantidad de eventos y promedios de temperatura, humedad y calidad del aire.
+* Checkpoints automáticos cada 60 segundos.
+* Persistencia del estado mediante checkpoints administrados por Managed Flink.
+* Bucket S3 para almacenar el artefacto JAR de la aplicación.
+* Logs y monitoreo mediante Amazon CloudWatch.
+* Rol y política IAM específicos para la aplicación Flink.
+* Script de PowerShell para generar eventos de sensores y enviarlos a Kinesis.
+
 ## Estructura del proyecto
 
 ```text
@@ -65,6 +84,11 @@ Terraform-Scaffold/
 |       `-- variables.tf
 |
 |-- modules/
+|   |-- flink/
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |   `-- variables.tf
+|   |
 |   |-- identity/
 |   |   |-- main.tf
 |   |   |-- outputs.tf
@@ -79,6 +103,16 @@ Terraform-Scaffold/
 |       |-- main.tf
 |       |-- outputs.tf
 |       `-- variables.tf
+|
+|-- flink/
+|   |-- pom.xml
+|   `-- src/
+|       `-- main/
+|           `-- java/
+|               `-- com/
+|                   `-- dataops/
+|                       `-- flink/
+|                           `-- SensorStreamingJob.java
 |
 |-- k8s/
 |   |-- kafka-configmap.yaml
@@ -99,13 +133,22 @@ Terraform-Scaffold/
 |   |-- evidencia-firehose-s3.png
 |   |-- evidencia-kafka.png
 |   |-- evidencia-kafka-producer.png
-|   `-- evidencia-spark-streaming.png
+|   |-- evidencia-spark-streaming.png
+|   |-- Evidencia_Productor_Kinesis.png
+|   |-- Evidencia_WINDOW_RESULT.png
+|   |-- Evidencia_Checkpoints_Flink.png
+|   |-- evidencia-flink-aws.png
+|   |-- evidencia-kinesis-aws.png
+|   `-- evidencia-flink-jar-s3.png
 |
 `-- scripts/
-    `-- send_test_events.ps1
+    |-- send_test_events.ps1
+    `-- send_sensor_events.ps1
 ```
 
 Los archivos `terraform.tfvars` se mantienen únicamente de forma local y están excluidos del control de versiones mediante `.gitignore`.
+
+Los artefactos generados por Maven dentro de `flink/target/` también se mantienen fuera del repositorio.
 
 ## Organización
 
@@ -124,7 +167,7 @@ Esta configuración se ejecuta por separado porque el backend debe existir antes
 
 Es el punto de entrada del entorno de desarrollo.
 
-Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad e ingesta.
+Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad, ingesta y procesamiento con Flink.
 
 ### `modules/network`
 
@@ -160,6 +203,23 @@ Crea los recursos de ingesta en tiempo real:
 
 Los datos entregados por Firehose se almacenan utilizando una estructura de carpetas basada en la fecha de procesamiento.
 
+### `modules/flink`
+
+Contiene la infraestructura necesaria para ejecutar el procesamiento en tiempo real mediante AWS Managed Service for Apache Flink.
+
+El módulo crea:
+
+* Bucket S3 para almacenar el artefacto JAR.
+* Objeto S3 correspondiente a la aplicación compilada.
+* Rol y política IAM para la ejecución de Flink.
+* Grupo y stream de logs de CloudWatch.
+* Aplicación de AWS Managed Service for Apache Flink.
+* Configuración de checkpoints.
+* Configuración de monitoreo.
+* Configuración de paralelismo.
+
+El nombre del objeto JAR almacenado en S3 incluye una parte del hash del archivo. De esta forma, cuando el código cambia, Terraform detecta un nuevo artefacto y actualiza la aplicación.
+
 ### `k8s`
 
 Contiene los manifiestos de Kubernetes utilizados en la tercera preentrega:
@@ -180,6 +240,44 @@ Contiene el script Python encargado de simular datos provenientes de sensores ur
 
 Contiene el job de Spark Structured Streaming encargado de consumir los eventos desde Kafka y procesarlos en tiempo real.
 
+### `flink`
+
+Contiene la aplicación Java utilizada por AWS Managed Service for Apache Flink.
+
+El archivo principal es:
+
+```text
+flink/src/main/java/com/dataops/flink/SensorStreamingJob.java
+```
+
+La aplicación consume eventos desde Kinesis, interpreta los mensajes JSON, utiliza Event Time, genera Watermarks y procesa los datos mediante ventanas de un minuto agrupadas por `sensor_id`.
+
+El proyecto Java utiliza Maven y su configuración se encuentra en:
+
+```text
+flink/pom.xml
+```
+
+### `scripts`
+
+Contiene los scripts de PowerShell utilizados para generar eventos de prueba.
+
+El archivo:
+
+```text
+scripts/send_test_events.ps1
+```
+
+se utiliza para las pruebas de ingesta realizadas con Kinesis y Firehose.
+
+El archivo:
+
+```text
+scripts/send_sensor_events.ps1
+```
+
+genera eventos JSON de sensores urbanos utilizados para probar el procesamiento mediante AWS Managed Service for Apache Flink.
+
 ## Requisitos
 
 Para ejecutar el proyecto se necesita:
@@ -193,6 +291,8 @@ Para ejecutar el proyecto se necesita:
 * Minikube.
 * kubectl.
 * Python.
+* Java 17.
+* Apache Maven.
 
 Las credenciales de AWS no se almacenan dentro del repositorio.
 
@@ -533,6 +633,374 @@ Spark consume los eventos provenientes de Kafka y procesa el flujo utilizando ve
 
 ![Evidencia de Spark Structured Streaming](docs/evidencia-spark-streaming.png)
 
+## Preentrega 4: procesamiento en tiempo real con Apache Flink
+
+La cuarta etapa del proyecto incorpora procesamiento stateful en AWS utilizando Amazon Kinesis Data Streams y AWS Managed Service for Apache Flink.
+
+El flujo implementado es:
+
+```text
+Productor PowerShell
+        |
+        v
+Amazon Kinesis Data Streams
+        |
+        v
+AWS Managed Service
+for Apache Flink 1.20
+        |
+        v
+Deserialización JSON
+        |
+        v
+Event Time + Watermarks
+        |
+        v
+keyBy(sensor_id)
+        |
+        v
+Tumbling Window de 1 minuto
+        |
+        +-- Cantidad de eventos
+        +-- Promedio de temperatura
+        +-- Promedio de humedad
+        `-- Promedio de calidad del aire
+        |
+        v
+Amazon CloudWatch Logs
+```
+
+### Arquitectura
+
+```mermaid
+flowchart LR
+    Producer["Productor PowerShell<br/>Sensores urbanos"]
+    Kinesis["Amazon Kinesis<br/>Data Stream"]
+    Flink["AWS Managed Service<br/>for Apache Flink 1.20"]
+    Window["Event Time<br/>Watermark 10 segundos<br/>Window 1 minuto"]
+    Result["Conteo de eventos<br/>AVG temperatura<br/>AVG humedad<br/>AVG AQI"]
+    CloudWatch["Amazon CloudWatch"]
+    Checkpoint["Checkpoints<br/>cada 60 segundos"]
+    State["Estado persistente<br/>administrado por Flink"]
+
+    Producer -->|JSON| Kinesis
+    Kinesis --> Flink
+    Flink --> Window
+    Window --> Result
+    Result --> CloudWatch
+    Flink --> Checkpoint
+    Checkpoint --> State
+```
+
+### Infraestructura de Flink
+
+La infraestructura necesaria para Managed Flink está declarada mediante Terraform dentro de:
+
+```text
+modules/flink/
+```
+
+El módulo crea la aplicación de procesamiento, el bucket utilizado para almacenar el artefacto JAR, el rol y la política IAM necesarios y la integración con CloudWatch Logs.
+
+La aplicación utiliza:
+
+```text
+Runtime: FLINK-1_20
+Parallelism: 1
+Parallelism per KPU: 1
+Auto Scaling: deshabilitado
+```
+
+El Data Stream de Kinesis utilizado como fuente se configura mediante una propiedad de ejecución denominada:
+
+```text
+InputStream
+```
+
+que contiene el ARN del stream.
+
+### Aplicación Flink
+
+La aplicación está implementada en Java:
+
+```text
+flink/src/main/java/com/dataops/flink/SensorStreamingJob.java
+```
+
+El job obtiene el ARN del Kinesis Data Stream desde las propiedades configuradas en AWS Managed Service for Apache Flink.
+
+Los eventos utilizados contienen:
+
+* `sensor_id`
+* `temperature`
+* `humidity`
+* `air_quality_index`
+* `timestamp`
+
+Ejemplo:
+
+```json
+{
+  "sensor_id": "sensor_3",
+  "temperature": 25.42,
+  "humidity": 61.70,
+  "air_quality_index": 84,
+  "timestamp": "2026-08-21T19:10:35.0000000Z"
+}
+```
+
+### Event Time y Watermarks
+
+El campo `timestamp` de cada mensaje se utiliza como tiempo del evento.
+
+La aplicación utiliza un Watermark con una tolerancia máxima de 10 segundos para eventos que puedan llegar fuera de orden.
+
+La estrategia utilizada es equivalente a:
+
+```text
+WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(10))
+```
+
+También se configura una detección de inactividad de 30 segundos para evitar que una fuente temporalmente inactiva impida el avance global del Watermark.
+
+### Ventanas y procesamiento stateful
+
+Después de deserializar los eventos, el flujo se agrupa utilizando:
+
+```text
+keyBy(sensor_id)
+```
+
+Posteriormente se aplican ventanas Tumbling Event Time de 1 minuto.
+
+Dentro de cada ventana se calcula:
+
+* Cantidad de eventos.
+* Temperatura promedio.
+* Humedad promedio.
+* Índice promedio de calidad del aire.
+
+El operador de ventanas mantiene estado administrado por Apache Flink durante el procesamiento.
+
+Los resultados se registran utilizando el logger de la aplicación y pueden consultarse posteriormente mediante CloudWatch.
+
+Durante las pruebas se obtuvo, por ejemplo:
+
+```text
+WINDOW_RESULT sensor=sensor_1 |
+window_start=2026-08-21T19:10:00Z |
+window_end=2026-08-21T19:11:00Z |
+events=6 |
+avg_temperature=23.37 |
+avg_humidity=56.41 |
+avg_aqi=126.83
+```
+
+También se observaron resultados correspondientes a múltiples sensores y varias ventanas consecutivas de un minuto.
+
+### Checkpoints y tolerancia a fallos
+
+La aplicación utiliza checkpoints automáticos para permitir la recuperación del estado ante fallos.
+
+La configuración declarada mediante Terraform es:
+
+```text
+Checkpoint interval: 60000 ms
+Minimum pause between checkpoints: 5000 ms
+Checkpointing: enabled
+```
+
+Durante las pruebas se verificó la creación continua de checkpoints.
+
+Entre los checkpoints observados se encontraron:
+
+```text
+Completed checkpoint 52
+Completed checkpoint 53
+Completed checkpoint 54
+Completed checkpoint 55
+Completed checkpoint 56
+Completed checkpoint 57
+Completed checkpoint 58
+```
+
+Los logs de Managed Flink también mostraron la escritura de metadata asociada a los checkpoints mediante el sistema de archivos S3 utilizado por el servicio.
+
+### Compilación de la aplicación
+
+La aplicación Java utiliza Maven.
+
+Desde la raíz del repositorio puede compilarse mediante:
+
+```powershell
+mvn -f .\flink\pom.xml clean package
+```
+
+La compilación genera el artefacto:
+
+```text
+flink/target/realtime-flink-processing-1.0.0.jar
+```
+
+La carpeta:
+
+```text
+flink/target/
+```
+
+está excluida del control de versiones.
+
+Durante el despliegue, Terraform toma este JAR local y lo almacena dentro del bucket de artefactos de Flink.
+
+El nombre del objeto almacenado en S3 incluye una parte del hash del archivo.
+
+Por ejemplo:
+
+```text
+flink/realtime-flink-processing-78e105f2.jar
+```
+
+Esto permite que Terraform detecte cambios en el código de la aplicación y actualice el artefacto utilizado por Managed Flink.
+
+### Despliegue mediante Terraform
+
+Desde:
+
+```powershell
+cd environments\dev
+```
+
+se puede ejecutar:
+
+```powershell
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
+
+La aplicación Managed Flink se crea inicialmente detenida.
+
+Para consultar su estado:
+
+```powershell
+aws kinesisanalyticsv2 describe-application --application-name realtime-data-platform-dev-flink --query "ApplicationDetail.ApplicationStatus" --output text --region us-east-1
+```
+
+Una aplicación desplegada pero detenida aparece como:
+
+```text
+READY
+```
+
+Para iniciarla:
+
+```powershell
+aws kinesisanalyticsv2 start-application --application-name realtime-data-platform-dev-flink --region us-east-1
+```
+
+Durante la ejecución, el estado esperado es:
+
+```text
+RUNNING
+```
+
+### Generación de eventos de prueba
+
+El archivo:
+
+```text
+scripts/send_sensor_events.ps1
+```
+
+genera eventos JSON simulando sensores urbanos y los envía directamente al Kinesis Data Stream.
+
+Para realizar una prueba prolongada se utilizó:
+
+```powershell
+.\scripts\send_sensor_events.ps1 -RecordCount 180 -DelayMilliseconds 500
+```
+
+Durante la prueba se generaron datos correspondientes a cinco sensores diferentes y se enviaron correctamente 180 eventos.
+
+### Consulta de resultados en CloudWatch
+
+Los resultados de las ventanas pueden consultarse utilizando:
+
+```powershell
+aws logs filter-log-events --log-group-name "/aws/managed-flink/realtime-data-platform-dev" --filter-pattern "WINDOW_RESULT" --region us-east-1 --query "events[].message" --output text --no-cli-pager
+```
+
+Los mensajes muestran el sensor procesado, la ventana temporal, la cantidad de eventos y los valores promedio obtenidos.
+
+Los checkpoints también pueden consultarse mediante los logs de CloudWatch.
+
+### Evidencias de la Preentrega 4
+
+#### Productor hacia Kinesis
+
+El productor PowerShell genera eventos JSON de sensores urbanos y los envía directamente hacia Amazon Kinesis Data Streams.
+
+Durante la prueba se enviaron correctamente 180 eventos.
+
+![Evidencia del productor hacia Kinesis](docs/Evidencia_Productor_Kinesis.png)
+
+#### Procesamiento de ventanas con Flink
+
+Los logs de CloudWatch muestran los resultados generados por Flink para múltiples sensores y ventanas consecutivas de un minuto.
+
+Cada resultado incluye la cantidad de eventos procesados y los promedios de temperatura, humedad y calidad del aire.
+
+![Evidencia de ventanas de Flink](docs/Evidencia_WINDOW_RESULT.png)
+
+#### Checkpoints de Flink
+
+Durante la ejecución se verificó que los checkpoints se completaran periódicamente.
+
+La evidencia muestra múltiples checkpoints finalizados correctamente junto con su tamaño y duración.
+
+![Evidencia de checkpoints de Flink](docs/Evidencia_Checkpoints_Flink.png)
+
+#### Aplicación AWS Managed Service for Apache Flink
+
+La aplicación `realtime-data-platform-dev-flink` fue desplegada correctamente utilizando Apache Flink 1.20.
+
+![Evidencia de Managed Flink](docs/evidencia-flink-aws.png)
+
+#### Amazon Kinesis Data Stream
+
+El stream `realtime-data-platform-dev-stream` fue desplegado correctamente en modo provisionado utilizando dos shards.
+
+![Evidencia de Kinesis Data Streams](docs/evidencia-kinesis-aws.png)
+
+#### Artefacto JAR en Amazon S3
+
+El artefacto compilado de la aplicación fue almacenado correctamente en el bucket S3 destinado a Managed Flink.
+
+![Evidencia del JAR de Flink en S3](docs/evidencia-flink-jar-s3.png)
+
+### Limpieza de recursos
+
+Una vez finalizadas las pruebas, la aplicación puede detenerse mediante:
+
+```powershell
+aws kinesisanalyticsv2 stop-application --application-name realtime-data-platform-dev-flink --region us-east-1
+```
+
+Para evitar costos innecesarios, los recursos administrados por el entorno de desarrollo pueden eliminarse desde:
+
+```text
+environments/dev
+```
+
+mediante:
+
+```powershell
+terraform destroy
+```
+
+El backend remoto ubicado en `bootstrap` se mantiene separado del entorno de desarrollo y no forma parte de este proceso de destrucción.
+
 ## Validación del código
 
 Desde la raíz del repositorio se puede aplicar formato a todos los archivos:
@@ -561,5 +1029,7 @@ El archivo `.gitignore` evita subir al repositorio:
 * Copias de respaldo del estado.
 * Archivos temporales.
 * Credenciales y secretos.
+* Configuración local de VS Code.
+* Artefactos de compilación de Maven dentro de `flink/target/`.
 
 Los archivos `.terraform.lock.hcl` sí se incluyen para mantener versiones consistentes de los providers.

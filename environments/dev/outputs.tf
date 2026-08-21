@@ -42,3 +42,23 @@ output "firehose_role_arn" {
   description = "ARN del rol utilizado por Firehose"
   value       = module.kinesis.firehose_role_arn
 }
+
+output "flink_application_name" {
+  description = "Nombre de la aplicacion Managed Service for Apache Flink"
+  value       = module.flink.application_name
+}
+
+output "flink_application_arn" {
+  description = "ARN de la aplicacion Managed Service for Apache Flink"
+  value       = module.flink.application_arn
+}
+
+output "flink_artifact_bucket_name" {
+  description = "Bucket S3 que contiene el artefacto JAR de Flink"
+  value       = module.flink.artifact_bucket_name
+}
+
+output "flink_cloudwatch_log_group_name" {
+  description = "Log Group de CloudWatch utilizado por Flink"
+  value       = module.flink.cloudwatch_log_group_name
+}
