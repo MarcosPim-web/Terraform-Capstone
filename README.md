@@ -1,8 +1,8 @@
 # Infraestructura de datos en AWS con Terraform
 
-Este repositorio contiene el trabajo realizado para las preentregas 1, 2, 3 y 4 del curso de Data Engineering.
+Este repositorio contiene el trabajo realizado para las preentregas 1, 2, 3, 4 y 5 del curso de Data Engineering.
 
-El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose. La tercera incorpora un entorno local de procesamiento distribuido utilizando Kubernetes, Apache Kafka y Apache Spark Structured Streaming. La cuarta incorpora procesamiento stateful en AWS mediante Amazon Kinesis Data Streams y AWS Managed Service for Apache Flink.
+El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose. La tercera incorpora un entorno local de procesamiento distribuido utilizando Kubernetes, Apache Kafka y Apache Spark Structured Streaming. La cuarta incorpora procesamiento stateful en AWS mediante Amazon Kinesis Data Streams y AWS Managed Service for Apache Flink. La quinta extiende este procesamiento hacia una arquitectura Lakehouse utilizando Apache Iceberg, Amazon S3, AWS Glue Data Catalog y Amazon Athena.
 
 ## Recursos implementados
 
@@ -59,6 +59,24 @@ El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La 
 * Rol y política IAM específicos para la aplicación Flink.
 * Script de PowerShell para generar eventos de sensores y enviarlos a Kinesis.
 
+### Preentrega 5: Lakehouse con Apache Iceberg
+
+* Bucket S3 dedicado al warehouse del Lakehouse.
+* Versionado y cifrado habilitados en el bucket.
+* Base de datos `lakehouse_db` en AWS Glue Data Catalog.
+* Tabla Apache Iceberg `sensor_metrics`.
+* Integración de AWS Managed Service for Apache Flink con Apache Iceberg.
+* AWS Glue utilizado como catálogo de la tabla.
+* Amazon S3 utilizado para almacenar datos y metadata de Iceberg.
+* Escritura de resultados procesados mediante `IcebergSink`.
+* Archivos de datos almacenados en formato Parquet.
+* Metadata, manifests y snapshots administrados por Apache Iceberg.
+* Particionamiento de la tabla por día utilizando `window_start`.
+* Permisos IAM para que Flink pueda operar con S3 y AWS Glue.
+* Commits de Iceberg coordinados con los checkpoints de Flink.
+* Consulta de la tabla Iceberg desde Amazon Athena.
+* Validación end-to-end del flujo Kinesis → Flink → Iceberg → Glue → Athena.
+
 ## Estructura del proyecto
 
 ```text
@@ -95,6 +113,11 @@ Terraform-Scaffold/
 |   |   `-- variables.tf
 |   |
 |   |-- kinesis/
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |   `-- variables.tf
+|   |
+|   |-- lakehouse/
 |   |   |-- main.tf
 |   |   |-- outputs.tf
 |   |   `-- variables.tf
@@ -139,7 +162,10 @@ Terraform-Scaffold/
 |   |-- evidencia-flink-checkpoints.png
 |   |-- evidencia-flink-aws.png
 |   |-- evidencia-kinesis-aws.png
-|   `-- evidencia-flink-jar-s3.png
+|   |-- evidencia-flink-jar-s3.png
+|   |-- evidencia-glue-iceberg.png
+|   |-- evidencia-s3-iceberg.png
+|   `-- evidencia-athena-iceberg.png
 |
 `-- scripts/
     |-- send_test_events.ps1
@@ -167,7 +193,7 @@ Esta configuración se ejecuta por separado porque el backend debe existir antes
 
 Es el punto de entrada del entorno de desarrollo.
 
-Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad, ingesta y procesamiento con Flink.
+Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad, ingesta, procesamiento con Flink y almacenamiento Lakehouse.
 
 ### `modules/network`
 
@@ -218,7 +244,31 @@ El módulo crea:
 * Configuración de monitoreo.
 * Configuración de paralelismo.
 
+A partir de la quinta preentrega, el módulo también configura las propiedades necesarias para que la aplicación conozca la ubicación del warehouse de Apache Iceberg y la base de datos utilizada en AWS Glue.
+
+El rol de ejecución de Flink posee además permisos para leer y escribir objetos dentro del bucket del Lakehouse y consultar, crear o actualizar las tablas necesarias en AWS Glue Data Catalog.
+
 El nombre del objeto JAR almacenado en S3 incluye una parte del hash del archivo. De esta forma, cuando el código cambia, Terraform detecta un nuevo artefacto y actualiza la aplicación.
+
+### `modules/lakehouse`
+
+Contiene la infraestructura utilizada para la capa Lakehouse incorporada en la quinta preentrega.
+
+El módulo crea:
+
+* Bucket S3 dedicado al warehouse de Apache Iceberg.
+* Versionado del bucket.
+* Cifrado server-side mediante AES256.
+* Bloqueo de acceso público.
+* Base de datos `lakehouse_db` en AWS Glue Data Catalog.
+
+La ruta del warehouse se construye dentro del bucket utilizando el prefijo:
+
+```text
+warehouse/
+```
+
+y se entrega como output para que pueda ser utilizada por la aplicación de Apache Flink.
 
 ### `k8s`
 
@@ -252,6 +302,8 @@ flink/src/main/java/com/dataops/flink/SensorStreamingJob.java
 
 La aplicación consume eventos desde Kinesis, interpreta los mensajes JSON, utiliza Event Time, genera Watermarks y procesa los datos mediante ventanas de un minuto agrupadas por `sensor_id`.
 
+A partir de la quinta preentrega, los resultados de estas ventanas también se convierten al esquema de la tabla Iceberg y se escriben mediante `IcebergSink`.
+
 El proyecto Java utiliza Maven y su configuración se encuentra en:
 
 ```text
@@ -268,7 +320,15 @@ El archivo:
 scripts/send_test_events.ps1
 ```
 
-se utiliza para las pruebas de ingesta realizadas con Kinesis y Firehose.
+se utilizó inicialmente para las pruebas de ingesta realizadas con Kinesis y Firehose.
+
+En la quinta preentrega fue actualizado para generar eventos JSON con el esquema de sensores esperado por la aplicación Flink:
+
+* `sensor_id`
+* `temperature`
+* `humidity`
+* `air_quality_index`
+* `timestamp`
 
 El archivo:
 
@@ -979,6 +1039,474 @@ El artefacto compilado de la aplicación fue almacenado correctamente en el buck
 
 ![Evidencia del JAR de Flink en S3](docs/evidencia-flink-jar-s3.png)
 
+## Preentrega 5: Lakehouse con Apache Iceberg
+
+La quinta etapa del proyecto extiende el procesamiento en tiempo real desarrollado con Apache Flink incorporando una capa Lakehouse basada en Apache Iceberg.
+
+Los resultados agregados de las ventanas dejan de utilizarse únicamente como salida de monitoreo y también se persisten como una tabla Iceberg almacenada en Amazon S3 y registrada dentro de AWS Glue Data Catalog.
+
+El flujo implementado es:
+
+```text
+Amazon Kinesis Data Streams
+        |
+        v
+AWS Managed Service
+for Apache Flink 1.20
+        |
+        v
+Event Time + Watermarks
+        |
+        v
+Tumbling Window de 1 minuto
+        |
+        v
+Agregaciones por sensor_id
+        |
+        v
+Apache Iceberg Sink
+        |
+        +--------------------------+
+        |                          |
+        v                          v
+Amazon S3                  AWS Glue Data Catalog
+Parquet + Metadata         lakehouse_db
+                           sensor_metrics
+        |                          |
+        +------------+-------------+
+                     |
+                     v
+                Amazon Athena
+```
+
+### Arquitectura
+
+```mermaid
+flowchart LR
+    Kinesis["Amazon Kinesis<br/>Data Streams"]
+    Flink["AWS Managed Service<br/>for Apache Flink 1.20"]
+    Window["Event Time + Watermarks<br/>Window 1 minuto"]
+    Iceberg["Apache Iceberg<br/>IcebergSink"]
+    S3["Amazon S3<br/>Parquet + Metadata"]
+    Glue["AWS Glue Data Catalog<br/>lakehouse_db"]
+    Athena["Amazon Athena"]
+
+    Kinesis --> Flink
+    Flink --> Window
+    Window --> Iceberg
+    Iceberg --> S3
+    Iceberg --> Glue
+    S3 --> Athena
+    Glue --> Athena
+```
+
+### Infraestructura del Lakehouse
+
+La infraestructura de esta etapa está declarada mediante Terraform dentro de:
+
+```text
+modules/lakehouse/
+```
+
+El módulo crea un bucket S3 dedicado al almacenamiento del warehouse de Apache Iceberg.
+
+El bucket posee:
+
+```text
+Versioning: Enabled
+Server-side encryption: AES256
+Public access: Blocked
+```
+
+También se crea mediante Terraform la base de datos:
+
+```text
+lakehouse_db
+```
+
+dentro de AWS Glue Data Catalog.
+
+El warehouse utilizado por Apache Iceberg se encuentra dentro de:
+
+```text
+s3://realtime-data-platform-dev-lakehouse-<account-id>/warehouse/
+```
+
+La ubicación se expone mediante outputs de Terraform y se entrega al módulo de Flink como propiedad de ejecución.
+
+### Integración entre Flink e Iceberg
+
+La aplicación:
+
+```text
+flink/src/main/java/com/dataops/flink/SensorStreamingJob.java
+```
+
+fue extendida para persistir los resultados calculados por las ventanas utilizando Apache Iceberg.
+
+La configuración utiliza:
+
+```text
+Catalog: GlueCatalog
+FileIO: S3FileIO
+Database: lakehouse_db
+Table: sensor_metrics
+```
+
+Las propiedades necesarias para la integración son configuradas dentro de Managed Flink mediante el grupo:
+
+```text
+IcebergCatalog
+```
+
+que contiene:
+
+```text
+warehouse.path
+database.name
+```
+
+AWS Glue actúa como catálogo central de la tabla mientras que Amazon S3 almacena físicamente los datos y la metadata administrada por Iceberg.
+
+### Dependencias de Apache Iceberg
+
+El proyecto Maven fue extendido para incorporar las dependencias necesarias para utilizar Apache Iceberg con Flink 1.20 y AWS.
+
+Entre las dependencias utilizadas se encuentran:
+
+```text
+iceberg-flink-runtime-1.20
+iceberg-aws-bundle
+hadoop-client-api
+hadoop-client-runtime
+```
+
+La aplicación continúa empaquetándose como un JAR mediante Maven para posteriormente ser subida al bucket de artefactos utilizado por Managed Flink.
+
+### Tabla `sensor_metrics`
+
+La aplicación crea la tabla:
+
+```text
+lakehouse_db.sensor_metrics
+```
+
+si todavía no existe en AWS Glue.
+
+El esquema utilizado contiene siete columnas:
+
+```text
+sensor_id
+window_start
+window_end
+event_count
+avg_temperature
+avg_humidity
+avg_aqi
+```
+
+Cada registro representa el resultado agregado de un sensor para una ventana de Event Time de un minuto.
+
+Los datos almacenados contienen:
+
+* Identificador del sensor.
+* Inicio de la ventana.
+* Fin de la ventana.
+* Cantidad de eventos procesados.
+* Temperatura promedio.
+* Humedad promedio.
+* Índice promedio de calidad del aire.
+
+### Estrategia de particionamiento
+
+La tabla Iceberg utiliza una transformación de particionamiento basada en:
+
+```text
+day(window_start)
+```
+
+Durante las pruebas, los archivos de datos fueron almacenados en rutas como:
+
+```text
+data/window_start_day=2026-08-23/
+```
+
+Se utilizó `window_start` porque los datos generados son métricas temporales y las consultas analíticas normalmente se realizan sobre períodos de tiempo.
+
+El particionamiento por día permite que Apache Iceberg aplique partition pruning al consultar rangos temporales.
+
+De esta forma, una consulta filtrada por una fecha o un rango de fechas puede evitar leer archivos correspondientes a días que no forman parte de la consulta, reduciendo la cantidad de datos escaneados.
+
+No se utilizó `sensor_id` como estrategia principal de particionamiento para evitar generar una cantidad excesiva de particiones a medida que aumente el número de sensores.
+
+### Escritura mediante IcebergSink
+
+Después del procesamiento de las ventanas, los resultados son convertidos a filas compatibles con el esquema de Apache Iceberg.
+
+La aplicación utiliza:
+
+```text
+IcebergSink
+```
+
+para escribir los resultados en la tabla `sensor_metrics`.
+
+Los datos se almacenan físicamente en Amazon S3 en formato Parquet.
+
+Durante la prueba end-to-end se generaron múltiples archivos:
+
+```text
+*.parquet
+```
+
+dentro de la partición correspondiente al día de procesamiento.
+
+### Checkpoints y commits de Iceberg
+
+La escritura hacia Apache Iceberg está integrada con el mecanismo de checkpoints de Flink.
+
+La aplicación mantiene la configuración utilizada en la preentrega anterior:
+
+```text
+Checkpoint interval: 60000 ms
+Minimum pause between checkpoints: 5000 ms
+Checkpointing: enabled
+```
+
+Durante la ejecución se verificaron checkpoints completados correctamente junto con actividad de los componentes:
+
+```text
+IcebergWriteAggregator
+IcebergCommitter
+```
+
+Los commits permiten que los nuevos archivos escritos sean incorporados de forma consistente a la metadata de la tabla Iceberg.
+
+### Metadata de Apache Iceberg
+
+Apache Iceberg mantiene la metadata de la tabla dentro del mismo warehouse en Amazon S3.
+
+La ruta utilizada es:
+
+```text
+warehouse/lakehouse_db.db/sensor_metrics/metadata/
+```
+
+Durante las pruebas se verificaron múltiples versiones de archivos:
+
+```text
+00000-....metadata.json
+00001-....metadata.json
+00002-....metadata.json
+00003-....metadata.json
+00004-....metadata.json
+00005-....metadata.json
+```
+
+También se generaron archivos:
+
+```text
+*-m0.avro
+snap-*.avro
+```
+
+correspondientes a manifests y snapshots utilizados por Apache Iceberg.
+
+La existencia de diferentes versiones de `metadata.json` muestra la evolución de la tabla a medida que se realizan nuevos commits.
+
+### Control de concurrencia
+
+No se agregó una tabla DynamoDB adicional para bloquear los commits de Apache Iceberg.
+
+AWS Glue e Iceberg utilizan optimistic locking para controlar las actualizaciones concurrentes de la metadata de la tabla.
+
+Esto permite detectar si la versión de metadata cambió antes de completar una actualización y evita sobrescribir silenciosamente cambios realizados por otro proceso.
+
+La tabla DynamoDB creada durante la primera preentrega continúa siendo utilizada únicamente para el bloqueo del estado remoto de Terraform.
+
+### Permisos IAM
+
+El rol de ejecución de AWS Managed Service for Apache Flink fue extendido para permitir la interacción con la capa Lakehouse.
+
+Los permisos sobre Amazon S3 permiten:
+
+* Listar el bucket del Lakehouse.
+* Leer objetos.
+* Escribir objetos.
+* Eliminar objetos cuando sea necesario.
+* Administrar operaciones multipart.
+
+Los permisos de AWS Glue permiten:
+
+* Consultar bases de datos.
+* Consultar tablas.
+* Crear tablas.
+* Actualizar tablas.
+
+Estos permisos permiten que la aplicación utilice `GlueCatalog` y escriba los resultados mediante Apache Iceberg.
+
+### Generación de eventos de prueba
+
+Para verificar el flujo de la quinta preentrega se utilizó:
+
+```powershell
+.\scripts\send_test_events.ps1
+```
+
+El script genera eventos JSON compatibles con el esquema esperado por `SensorStreamingJob.java`.
+
+Ejemplo:
+
+```json
+{
+  "sensor_id": "sensor-01",
+  "temperature": 24.37,
+  "humidity": 61.82,
+  "air_quality_index": 74,
+  "timestamp": "2026-08-23T14:50:00.0000000Z"
+}
+```
+
+Los eventos son enviados al stream:
+
+```text
+realtime-data-platform-dev-stream
+```
+
+utilizando el identificador del sensor como partition key.
+
+### Verificación de archivos en Amazon S3
+
+Los archivos generados por Apache Iceberg pueden verificarse mediante AWS CLI:
+
+```powershell
+aws s3 ls s3://realtime-data-platform-dev-lakehouse-<account-id>/warehouse/ --recursive
+```
+
+Durante la prueba se observaron archivos de datos en rutas como:
+
+```text
+warehouse/lakehouse_db.db/sensor_metrics/data/window_start_day=2026-08-23/
+```
+
+junto con las diferentes versiones de metadata, manifests y snapshots.
+
+Esto confirma que los resultados procesados por Apache Flink fueron persistidos correctamente dentro del Lakehouse.
+
+### Registro en AWS Glue Data Catalog
+
+La tabla fue registrada correctamente en AWS Glue Data Catalog con la siguiente configuración:
+
+```text
+Database: lakehouse_db
+Table: sensor_metrics
+Table format: Apache Iceberg
+```
+
+Glue reconoce también el esquema de siete columnas generado por la aplicación.
+
+La ubicación de la tabla apunta al warehouse almacenado en Amazon S3.
+
+### Consulta mediante Amazon Athena
+
+La tabla Iceberg fue consultada desde Amazon Athena utilizando AWS Glue Data Catalog.
+
+La consulta utilizada durante la prueba fue:
+
+```sql
+SELECT *
+FROM lakehouse_db.sensor_metrics
+ORDER BY window_start DESC
+LIMIT 20;
+```
+
+Athena devolvió correctamente registros correspondientes a diferentes sensores y ventanas de un minuto.
+
+Los resultados incluyen:
+
+```text
+sensor_id
+window_start
+window_end
+event_count
+avg_temperature
+avg_humidity
+avg_aqi
+```
+
+Esto permite comprobar que los datos transformados por Apache Flink pueden ser consultados directamente desde la capa Lakehouse.
+
+### Validación end-to-end
+
+Durante la prueba final se verificó el flujo completo:
+
+```text
+Amazon Kinesis Data Streams
+        |
+        v
+AWS Managed Service for Apache Flink
+        |
+        v
+Event Time + Watermarks
+        |
+        v
+Ventanas de 1 minuto
+        |
+        v
+Agregaciones por sensor
+        |
+        v
+Apache Iceberg
+        |
+        +--> Amazon S3
+        |    Parquet
+        |    metadata.json
+        |    manifests
+        |    snapshots
+        |
+        +--> AWS Glue Data Catalog
+                 |
+                 v
+             Amazon Athena
+```
+
+La prueba confirmó:
+
+* Recepción de eventos desde Kinesis.
+* Procesamiento mediante Apache Flink.
+* Procesamiento mediante Event Time y Watermarks.
+* Generación de ventanas de un minuto.
+* Cálculo de las métricas agregadas.
+* Escritura de archivos Parquet.
+* Generación de metadata de Apache Iceberg.
+* Creación de manifests y snapshots.
+* Registro de la tabla dentro de AWS Glue.
+* Consulta exitosa de la tabla mediante Amazon Athena.
+
+### Evidencias de la Preentrega 5
+
+#### Tabla Apache Iceberg en AWS Glue
+
+AWS Glue Data Catalog muestra la tabla `sensor_metrics` dentro de la base de datos `lakehouse_db`.
+
+La tabla aparece identificada con formato Apache Iceberg y Glue reconoce correctamente las siete columnas utilizadas por el pipeline.
+
+![Evidencia de Apache Iceberg en AWS Glue](docs/evidencia-glue-iceberg.png)
+
+#### Archivos Iceberg almacenados en Amazon S3
+
+La evidencia muestra los archivos Parquet generados por el pipeline junto con las diferentes versiones de `metadata.json`, manifests y snapshots de Apache Iceberg.
+
+También puede observarse la partición generada mediante `window_start_day`.
+
+![Evidencia de Apache Iceberg en Amazon S3](docs/evidencia-s3-iceberg.png)
+
+#### Consulta de la tabla mediante Amazon Athena
+
+Amazon Athena permite consultar directamente `lakehouse_db.sensor_metrics` y devuelve los resultados de las ventanas procesadas por Apache Flink.
+
+![Evidencia de consulta mediante Amazon Athena](docs/evidencia-athena-iceberg.png)
+
 ### Limpieza de recursos
 
 Una vez finalizadas las pruebas, la aplicación puede detenerse mediante:
@@ -1001,6 +1529,8 @@ terraform destroy
 
 El backend remoto ubicado en `bootstrap` se mantiene separado del entorno de desarrollo y no forma parte de este proceso de destrucción.
 
+El bucket del Lakehouse utiliza `force_destroy` dentro del entorno de desarrollo, por lo que al ejecutar `terraform destroy` también se eliminan los archivos Parquet, la metadata, los manifests y los snapshots de Apache Iceberg generados durante las pruebas.
+
 ## Validación del código
 
 Desde la raíz del repositorio se puede aplicar formato a todos los archivos:
@@ -1017,6 +1547,12 @@ terraform plan
 ```
 
 El archivo `PLAN_OUTPUT.md` contiene el resultado de uno de los planes realizados durante el desarrollo.
+
+La aplicación Java puede compilarse y validarse mediante Maven utilizando:
+
+```powershell
+mvn -f .\flink\pom.xml clean package
+```
 
 ## Seguridad y control de versiones
 

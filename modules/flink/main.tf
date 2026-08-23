@@ -130,6 +130,47 @@ resource "aws_iam_policy" "flink" {
         Resource = var.kinesis_stream_arn
       },
       {
+        Sid    = "AccessLakehouseBucket"
+        Effect = "Allow"
+
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:ListBucketMultipartUploads"
+        ]
+
+        Resource = var.lakehouse_bucket_arn
+      },
+      {
+        Sid    = "ManageLakehouseObjects"
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:AbortMultipartUpload",
+          "s3:ListMultipartUploadParts"
+        ]
+
+        Resource = "${var.lakehouse_bucket_arn}/*"
+      },
+      {
+        Sid    = "AccessGlueIcebergCatalog"
+        Effect = "Allow"
+
+        Action = [
+          "glue:GetDatabase",
+          "glue:GetDatabases",
+          "glue:GetTable",
+          "glue:GetTables",
+          "glue:CreateTable",
+          "glue:UpdateTable"
+        ]
+
+        Resource = "*"
+      },
+      {
         Sid    = "DescribeCloudWatchLogs"
         Effect = "Allow"
 
@@ -200,6 +241,14 @@ resource "aws_kinesisanalyticsv2_application" "flink" {
 
         property_map = {
           "stream.arn" = var.kinesis_stream_arn
+        }
+      }
+      property_group {
+        property_group_id = "IcebergCatalog"
+
+        property_map = {
+          "warehouse.path" = var.iceberg_warehouse_path
+          "database.name"  = var.glue_database_name
         }
       }
     }
