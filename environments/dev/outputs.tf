@@ -62,3 +62,18 @@ output "flink_cloudwatch_log_group_name" {
   description = "Log Group de CloudWatch utilizado por Flink"
   value       = module.flink.cloudwatch_log_group_name
 }
+
+output "lakehouse_bucket_name" {
+  value       = module.lakehouse.bucket_name
+  description = "Nombre del bucket S3 utilizado como Lakehouse Iceberg"
+}
+
+output "glue_database_name" {
+  value       = module.lakehouse.glue_database_name
+  description = "Nombre de la base de datos de AWS Glue para Iceberg"
+}
+
+output "iceberg_warehouse_path" {
+  value       = module.lakehouse.warehouse_path
+  description = "Ruta S3 del warehouse de Apache Iceberg"
+}

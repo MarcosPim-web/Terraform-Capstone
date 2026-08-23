@@ -3,17 +3,34 @@ param(
     [int]$RecordCount = 100
 )
 
-Write-Host "Enviando $RecordCount eventos a $StreamName..."
+Write-Host "Enviando $RecordCount eventos de sensores a $StreamName..."
 
 for ($i = 1; $i -le $RecordCount; $i++) {
-    $event = @{
-        event_id  = [guid]::NewGuid().ToString()
-        user_id   = "user-$($i % 20)"
-        event_type = "page_view"
-        timestamp = (Get-Date).ToUniversalTime().ToString("o")
+
+    $sensorNumber = (($i - 1) % 5) + 1
+    $sensorId = "sensor-{0:D2}" -f $sensorNumber
+
+    $temperature = [math]::Round(
+        (Get-Random -Minimum 1500 -Maximum 3501) / 100.0,
+        2
+    )
+
+    $humidity = [math]::Round(
+        (Get-Random -Minimum 3000 -Maximum 9001) / 100.0,
+        2
+    )
+
+    $airQualityIndex = Get-Random -Minimum 20 -Maximum 151
+
+    $event = [ordered]@{
+        sensor_id         = $sensorId
+        temperature       = $temperature
+        humidity          = $humidity
+        air_quality_index = $airQualityIndex
+        timestamp         = (Get-Date).ToUniversalTime().ToString("o")
     } | ConvertTo-Json -Compress
 
-    $partitionKey = "user-$($i % 20)-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $partitionKey = $sensorId
     $tempFile = [System.IO.Path]::GetTempFileName()
 
     [System.IO.File]::WriteAllText(

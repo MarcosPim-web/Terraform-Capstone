@@ -15,6 +15,7 @@
 
         <flink.version>1.20.0</flink.version>
         <kinesis.connector.version>5.0.0-1.20</kinesis.connector.version>
+        <iceberg.version>1.10.2</iceberg.version>
 
         <maven.compiler.release>11</maven.compiler.release>
     </properties>
@@ -50,6 +51,50 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kinesis</artifactId>
             <version>${kinesis.connector.version}</version>
+        </dependency>
+
+        <!-- Apache Iceberg runtime compatible con Flink 1.20 -->
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-flink-runtime-1.20</artifactId>
+            <version>${iceberg.version}</version>
+        </dependency>
+
+        <!-- API de Hadoop requerida por CatalogLoader de Iceberg -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client-api</artifactId>
+            <version>3.4.1</version>
+        </dependency>
+
+        <!-- Runtime de Hadoop requerido por Iceberg -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client-runtime</artifactId>
+            <version>3.4.1</version>
+        </dependency>
+
+        <!-- API de logging utilizada por el job de Flink -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.36</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Integracion de Iceberg con AWS Glue y Amazon S3 -->
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-aws-bundle</artifactId>
+            <version>${iceberg.version}</version>
+        </dependency>
+
+        <!-- Tipos internos de Flink que utilizaremos para escribir filas en Iceberg -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-common</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- Procesamiento de los eventos JSON -->
