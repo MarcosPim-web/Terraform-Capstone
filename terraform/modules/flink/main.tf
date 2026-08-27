@@ -156,30 +156,55 @@ resource "aws_iam_policy" "flink" {
         Resource = "${var.lakehouse_bucket_arn}/*"
       },
       {
-        Sid    = "AccessGlueIcebergCatalog"
+        Sid    = "AccessGlueDatabases"
         Effect = "Allow"
 
         Action = [
           "glue:GetDatabase",
-          "glue:GetDatabases",
+          "glue:GetDatabases"
+        ]
+
+        Resource = [
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/*"
+        ]
+      },
+      {
+        Sid    = "AccessGlueIcebergTables"
+        Effect = "Allow"
+
+        Action = [
           "glue:GetTable",
           "glue:GetTables",
           "glue:CreateTable",
           "glue:UpdateTable"
         ]
 
-        Resource = "*"
+        Resource = [
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/${var.glue_database_name}",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:table/${var.glue_database_name}/*"
+        ]
       },
       {
-        Sid    = "DescribeCloudWatchLogs"
+        Sid    = "DescribeCloudWatchLogGroups"
         Effect = "Allow"
 
         Action = [
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
+          "logs:DescribeLogGroups"
         ]
 
         Resource = "*"
+      },
+      {
+        Sid    = "DescribeFlinkLogStreams"
+        Effect = "Allow"
+
+        Action = [
+          "logs:DescribeLogStreams"
+        ]
+
+        Resource = aws_cloudwatch_log_group.flink.arn
       },
       {
         Sid    = "WriteCloudWatchLogs"

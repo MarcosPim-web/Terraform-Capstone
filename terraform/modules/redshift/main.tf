@@ -85,12 +85,24 @@ resource "aws_iam_policy" "redshift" {
       },
 
       {
-        Sid    = "ReadGlueCatalog"
+        Sid    = "ReadGlueDatabases"
         Effect = "Allow"
 
         Action = [
           "glue:GetDatabase",
-          "glue:GetDatabases",
+          "glue:GetDatabases"
+        ]
+
+        Resource = [
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/*"
+        ]
+      },
+      {
+        Sid    = "ReadGlueLakehouseTables"
+        Effect = "Allow"
+
+        Action = [
           "glue:GetTable",
           "glue:GetTables",
           "glue:GetPartition",
@@ -98,7 +110,11 @@ resource "aws_iam_policy" "redshift" {
           "glue:BatchGetPartition"
         ]
 
-        Resource = "*"
+        Resource = [
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/${var.glue_database_name}",
+          "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:table/${var.glue_database_name}/*"
+        ]
       },
 
       {

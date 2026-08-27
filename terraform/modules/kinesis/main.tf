@@ -103,7 +103,7 @@ resource "aws_iam_policy" "firehose" {
           "logs:PutLogEvents"
         ]
 
-        Resource = "*"
+        Resource = aws_cloudwatch_log_stream.firehose.arn
       }
     ]
   })

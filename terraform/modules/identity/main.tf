@@ -104,21 +104,43 @@ resource "aws_iam_policy" "audit_read_only" {
 
     Statement = [
       {
+        Sid    = "DescribeNetworkResources"
         Effect = "Allow"
 
         Action = [
           "ec2:DescribeVpcs",
           "ec2:DescribeSubnets",
           "ec2:DescribeRouteTables",
-          "ec2:DescribeVpcEndpoints",
+          "ec2:DescribeVpcEndpoints"
+        ]
+
+        Resource = "*"
+      },
+      {
+        Sid    = "InspectDataBucket"
+        Effect = "Allow"
+
+        Action = [
           "s3:GetBucketLocation",
           "s3:GetBucketPolicy",
-          "s3:ListBucket",
+          "s3:ListBucket"
+        ]
+
+        Resource = "arn:aws:s3:::${var.bucket_name}"
+      },
+      {
+        Sid    = "InspectProjectRoles"
+        Effect = "Allow"
+
+        Action = [
           "iam:GetRole",
           "iam:ListAttachedRolePolicies"
         ]
 
-        Resource = "*"
+        Resource = [
+          aws_iam_role.data_processing.arn,
+          aws_iam_role.audit_read_only.arn
+        ]
       }
     ]
   })
