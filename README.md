@@ -2234,3 +2234,17 @@ El archivo `.gitignore` evita subir al repositorio:
 * Artefactos de compilación de Maven dentro de `flink/target/`.
 
 Los archivos `.terraform.lock.hcl` sí se incluyen para mantener versiones consistentes de los providers.
+
+## Validaci?n End-to-End
+
+La plataforma fue desplegada y validada de extremo a extremo utilizando un lote controlado de eventos.
+
+Se comprobaron ambos caminos de procesamiento:
+
+- **Hot path:** Producer ? Kinesis ? Redshift Serverless.
+- **Historical path:** Producer ? Kinesis ? Flink ? Apache Iceberg ? S3 / Glue.
+
+La validaci?n confirm? 100 eventos procesados consistentemente en ambos caminos, sin diferencias de conteo, con `IteratorAgeMilliseconds = 0` y sin checkpoints fallidos en Flink.
+
+Los resultados completos est?n documentados en [`docs/e2e-validation.md`](docs/e2e-validation.md).
+
