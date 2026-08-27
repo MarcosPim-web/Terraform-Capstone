@@ -105,19 +105,19 @@ El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La 
 ## Estructura del proyecto
 
 ```text
-Terraform-Scaffold/
+Terraform-Capstone/
 |-- .gitignore
 |-- PLAN_OUTPUT.md
 |-- README.md
 |
-|-- bootstrap/
+|-- terraform/bootstrap/
 |   |-- .terraform.lock.hcl
 |   |-- main.tf
 |   |-- outputs.tf
 |   |-- provider.tf
 |   `-- variables.tf
 |
-|-- environments/
+|-- terraform/environments/
 |   `-- dev/
 |       |-- .terraform.lock.hcl
 |       |-- backend.tf
@@ -126,7 +126,7 @@ Terraform-Scaffold/
 |       |-- provider.tf
 |       `-- variables.tf
 |
-|-- modules/
+|-- terraform/modules/
 |   |-- flink/
 |   |   |-- main.tf
 |   |   |-- outputs.tf
@@ -219,7 +219,7 @@ Los artefactos generados por Maven dentro de `flink/target/` también se mantien
 
 ## Organización
 
-### `bootstrap`
+### `terraform/bootstrap`
 
 Contiene los recursos necesarios para almacenar el estado de Terraform de manera remota:
 
@@ -230,13 +230,13 @@ Contiene los recursos necesarios para almacenar el estado de Terraform de manera
 
 Esta configuración se ejecuta por separado porque el backend debe existir antes de desplegar el resto de la infraestructura.
 
-### `environments/dev`
+### `terraform/environments/dev`
 
 Es el punto de entrada del entorno de desarrollo.
 
 Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad, ingesta, procesamiento con Flink, almacenamiento Lakehouse y analítica con Redshift Serverless.
 
-### `modules/network`
+### `terraform/modules/network`
 
 Crea la infraestructura de red:
 
@@ -250,7 +250,7 @@ La VPC mantiene habilitados `enable_dns_support` y `enable_dns_hostnames`, neces
 
 Las subredes no asignan direcciones IP públicas automáticamente.
 
-### `modules/identity`
+### `terraform/modules/identity`
 
 Crea los permisos principales del proyecto:
 
@@ -260,7 +260,7 @@ Crea los permisos principales del proyecto:
 
 El acceso de procesamiento se restringe al prefijo configurado dentro del bucket.
 
-### `modules/kinesis`
+### `terraform/modules/kinesis`
 
 Crea los recursos de ingesta en tiempo real:
 
@@ -272,7 +272,7 @@ Crea los recursos de ingesta en tiempo real:
 
 Los datos entregados por Firehose se almacenan utilizando una estructura de carpetas basada en la fecha de procesamiento.
 
-### `modules/flink`
+### `terraform/modules/flink`
 
 Contiene la infraestructura necesaria para ejecutar el procesamiento en tiempo real mediante AWS Managed Service for Apache Flink.
 
@@ -293,7 +293,7 @@ El rol de ejecución de Flink posee además permisos para leer y escribir objeto
 
 El nombre del objeto JAR almacenado en S3 incluye una parte del hash del archivo. De esta forma, cuando el código cambia, Terraform detecta un nuevo artefacto y actualiza la aplicación.
 
-### `modules/lakehouse`
+### `terraform/modules/lakehouse`
 
 Contiene la infraestructura utilizada para la capa Lakehouse incorporada en la quinta preentrega.
 
@@ -313,7 +313,7 @@ warehouse/
 
 y se entrega como output para que pueda ser utilizada por la aplicación de Apache Flink.
 
-### `modules/redshift`
+### `terraform/modules/redshift`
 
 Contiene la infraestructura utilizada para la capa analítica de baja latencia incorporada en la sexta preentrega.
 
@@ -461,10 +461,10 @@ Las credenciales de AWS no se almacenan dentro del repositorio.
 
 ## Despliegue del backend
 
-Ingresar en la carpeta `bootstrap`:
+Ingresar en la carpeta `terraform/bootstrap`:
 
 ```powershell
-cd bootstrap
+cd terraform\bootstrap
 ```
 
 Inicializar Terraform:
@@ -496,7 +496,7 @@ terraform apply
 Ingresar en la carpeta del entorno:
 
 ```powershell
-cd environments\dev
+cd terraform\environments\dev
 ```
 
 Inicializar Terraform y conectar el backend remoto:
@@ -860,7 +860,7 @@ flowchart LR
 La infraestructura necesaria para Managed Flink está declarada mediante Terraform dentro de:
 
 ```text
-modules/flink/
+terraform/modules/flink/
 ```
 
 El módulo crea la aplicación de procesamiento, el bucket utilizado para almacenar el artefacto JAR, el rol y la política IAM necesarios y la integración con CloudWatch Logs.
@@ -1030,7 +1030,7 @@ Esto permite que Terraform detecte cambios en el código de la aplicación y act
 Desde:
 
 ```powershell
-cd environments\dev
+cd terraform\environments\dev
 ```
 
 se puede ejecutar:
@@ -1208,7 +1208,7 @@ flowchart LR
 La infraestructura de esta etapa está declarada mediante Terraform dentro de:
 
 ```text
-modules/lakehouse/
+terraform/modules/lakehouse/
 ```
 
 El módulo crea un bucket S3 dedicado al almacenamiento del warehouse de Apache Iceberg.
@@ -1689,7 +1689,7 @@ flowchart LR
 La infraestructura está declarada mediante Terraform dentro de:
 
 ```text
-modules/redshift/
+terraform/modules/redshift/
 ```
 
 El módulo crea un Namespace y un Workgroup de Redshift Serverless:
@@ -2183,7 +2183,7 @@ aws kinesisanalyticsv2 stop-application --application-name realtime-data-platfor
 Para evitar costos innecesarios, los recursos administrados por el entorno de desarrollo, incluyendo Redshift Serverless y el Interface VPC Endpoint de Kinesis, pueden eliminarse desde:
 
 ```text
-environments/dev
+terraform/environments/dev
 ```
 
 mediante:
@@ -2192,7 +2192,7 @@ mediante:
 terraform destroy
 ```
 
-El backend remoto ubicado en `bootstrap` se mantiene separado del entorno de desarrollo y no forma parte de este proceso de destrucción.
+El backend remoto ubicado en `terraform/bootstrap` se mantiene separado del entorno de desarrollo y no forma parte de este proceso de destrucción.
 
 El bucket del Lakehouse utiliza `force_destroy` dentro del entorno de desarrollo, por lo que al ejecutar `terraform destroy` también se eliminan los archivos Parquet, la metadata, los manifests y los snapshots de Apache Iceberg generados durante las pruebas.
 
