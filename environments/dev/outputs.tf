@@ -77,3 +77,28 @@ output "iceberg_warehouse_path" {
   value       = module.lakehouse.warehouse_path
   description = "Ruta S3 del warehouse de Apache Iceberg"
 }
+
+output "redshift_namespace_name" {
+  description = "Nombre del namespace de Redshift Serverless"
+  value       = module.redshift.namespace_name
+}
+
+output "redshift_workgroup_name" {
+  description = "Nombre del workgroup de Redshift Serverless"
+  value       = module.redshift.workgroup_name
+}
+
+output "redshift_workgroup_arn" {
+  description = "ARN del workgroup de Redshift Serverless"
+  value       = module.redshift.workgroup_arn
+}
+
+output "redshift_role_arn" {
+  description = "ARN del rol IAM utilizado por Redshift"
+  value       = module.redshift.redshift_role_arn
+}
+
+output "kinesis_vpc_endpoint_id" {
+  description = "ID del VPC Endpoint privado de Kinesis"
+  value       = module.redshift.kinesis_vpc_endpoint_id
+}
