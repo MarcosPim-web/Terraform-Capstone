@@ -1,6 +1,6 @@
 # Infraestructura de datos en AWS con Terraform
 
-Este repositorio contiene el trabajo realizado para las preentregas 1, 2, 3, 4, 5 y 6 del curso de Data Engineering.
+Este repositorio contiene el proyecto Capstone desarrollado a partir de las preentregas 1, 2, 3, 4, 5 y 6 del curso de Data Engineering. Las distintas etapas fueron integradas progresivamente hasta conformar la plataforma de datos validada de extremo a extremo.
 
 El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose. La tercera incorpora un entorno local de procesamiento distribuido utilizando Kubernetes, Apache Kafka y Apache Spark Structured Streaming. La cuarta incorpora procesamiento stateful en AWS mediante Amazon Kinesis Data Streams y AWS Managed Service for Apache Flink. La quinta extiende este procesamiento hacia una arquitectura Lakehouse utilizando Apache Iceberg, Amazon S3, AWS Glue Data Catalog y Amazon Athena. La sexta incorpora una capa analítica de baja latencia mediante Amazon Redshift Serverless, utilizando Redshift Streaming Ingestion para consumir eventos directamente desde Kinesis, Materialized Views incrementales, integración con el Lakehouse Iceberg mediante AWS Glue Data Catalog y consultas que combinan datos calientes e históricos.
 
@@ -206,7 +206,8 @@ Terraform-Capstone/
 |   |-- evidencia-redshift-join-hot-historico.png
 |   |-- evidencia-redshift-lag.png
 |   |-- evidencia-redshift-seguridad.png
-|   `-- evidencia-redshift-iceberg-metadata.png
+|   |-- evidencia-redshift-iceberg-metadata.png
+|   `-- e2e-validation.md
 |
 `-- scripts/
     |-- send_test_events.ps1
@@ -1784,7 +1785,7 @@ Redshift se conecta directamente con el stream mediante:
 ```sql
 CREATE EXTERNAL SCHEMA kinesis_stream
 FROM KINESIS
-IAM_ROLE 'arn:aws:iam::<account-id>:role/realtime-data-platform-dev-redshift-role';
+IAM_ROLE default;
 ```
 
 El stream utilizado es:
@@ -1923,7 +1924,7 @@ CREATE EXTERNAL SCHEMA lakehouse_ext
 FROM DATA CATALOG
 DATABASE 'lakehouse_db'
 REGION 'us-east-1'
-IAM_ROLE 'arn:aws:iam::<account-id>:role/realtime-data-platform-dev-redshift-role';
+IAM_ROLE default;
 ```
 
 Una vez que Apache Flink procesa eventos y crea la tabla Iceberg, Redshift puede visualizar:
@@ -2235,16 +2236,27 @@ El archivo `.gitignore` evita subir al repositorio:
 
 Los archivos `.terraform.lock.hcl` sí se incluyen para mantener versiones consistentes de los providers.
 
-## Validaci?n End-to-End
+## Validación End-to-End
 
-La plataforma fue desplegada y validada de extremo a extremo utilizando un lote controlado de eventos.
+La plataforma fue desplegada desde cero y validada de extremo a extremo utilizando un lote controlado de eventos.
 
-Se comprobaron ambos caminos de procesamiento:
+Se comprobaron los dos caminos que consumen el mismo Amazon Kinesis Data Stream:
 
-- **Hot path:** Producer ? Kinesis ? Redshift Serverless.
-- **Historical path:** Producer ? Kinesis ? Flink ? Apache Iceberg ? S3 / Glue.
+- **Hot path:** Producer → Kinesis → Redshift Serverless.
+- **Historical path:** Producer → Kinesis → Flink → Apache Iceberg → Amazon S3 / AWS Glue.
 
-La validaci?n confirm? 100 eventos procesados consistentemente en ambos caminos, sin diferencias de conteo, con `IteratorAgeMilliseconds = 0` y sin checkpoints fallidos en Flink.
+La validación del lote principal obtuvo:
 
-Los resultados completos est?n documentados en [`docs/e2e-validation.md`](docs/e2e-validation.md).
+- **100 eventos** procesados en Redshift.
+- **100 eventos** procesados y agregados en Iceberg.
+- **5 sensores** presentes en ambos caminos.
+- **15 ventanas** de un minuto comparadas.
+- **0 diferencias de conteo** entre ambas capas.
+- Diferencias de promedios limitadas únicamente a precisión de punto flotante.
+- `GetRecords.IteratorAgeMilliseconds = 0`.
+- `numberOfFailedCheckpoints = 0`.
+- Checkpoints de Flink observados con duraciones aproximadas de **190 a 363 ms**.
 
+Esto valida no solo la llegada de datos a ambos destinos, sino también la consistencia de los resultados producidos por el camino hot y el camino histórico.
+
+Los resultados completos están documentados en [`docs/e2e-validation.md`](docs/e2e-validation.md).
