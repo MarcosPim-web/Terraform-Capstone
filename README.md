@@ -1,8 +1,8 @@
 # Infraestructura de datos en AWS con Terraform
 
-Este repositorio contiene el trabajo realizado para las preentregas 1, 2, 3, 4 y 5 del curso de Data Engineering.
+Este repositorio contiene el trabajo realizado para las preentregas 1, 2, 3, 4, 5 y 6 del curso de Data Engineering.
 
-El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose. La tercera incorpora un entorno local de procesamiento distribuido utilizando Kubernetes, Apache Kafka y Apache Spark Structured Streaming. La cuarta incorpora procesamiento stateful en AWS mediante Amazon Kinesis Data Streams y AWS Managed Service for Apache Flink. La quinta extiende este procesamiento hacia una arquitectura Lakehouse utilizando Apache Iceberg, Amazon S3, AWS Glue Data Catalog y Amazon Athena.
+El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La primera parte se enfoca en la red, los permisos y el almacenamiento remoto del estado. La segunda agrega un flujo básico de ingesta de datos en tiempo real con Amazon Kinesis y Amazon Data Firehose. La tercera incorpora un entorno local de procesamiento distribuido utilizando Kubernetes, Apache Kafka y Apache Spark Structured Streaming. La cuarta incorpora procesamiento stateful en AWS mediante Amazon Kinesis Data Streams y AWS Managed Service for Apache Flink. La quinta extiende este procesamiento hacia una arquitectura Lakehouse utilizando Apache Iceberg, Amazon S3, AWS Glue Data Catalog y Amazon Athena. La sexta incorpora una capa analítica de baja latencia mediante Amazon Redshift Serverless, utilizando Redshift Streaming Ingestion para consumir eventos directamente desde Kinesis, Materialized Views incrementales, integración con el Lakehouse Iceberg mediante AWS Glue Data Catalog y consultas que combinan datos calientes e históricos.
 
 ## Recursos implementados
 
@@ -77,6 +77,31 @@ El proyecto utiliza Terraform para crear una infraestructura modular en AWS. La 
 * Consulta de la tabla Iceberg desde Amazon Athena.
 * Validación end-to-end del flujo Kinesis → Flink → Iceberg → Glue → Athena.
 
+### Preentrega 6: analítica avanzada in-stream con Amazon Redshift
+
+* Amazon Redshift Serverless desplegado mediante Terraform.
+* Namespace `realtime-data-platform-dev` y Workgroup `realtime-data-platform-dev-wg`.
+* Capacidad base y máxima limitada a 4 RPU.
+* Límite diario de uso de compute configurado para controlar costos.
+* Tercera subred privada agregada en una tercera Availability Zone.
+* DNS Support y DNS Hostnames habilitados en la VPC para utilizar Private DNS.
+* Interface VPC Endpoint privado para Amazon Kinesis Data Streams.
+* Rol y política IAM específicos para Redshift.
+* Redshift Streaming Ingestion desde Kinesis sin utilizar S3 como intermediario.
+* External Schema `kinesis_stream` conectado directamente al Kinesis Data Stream.
+* Materialized View `sensor_stream_raw` para ingerir y validar payloads JSON.
+* Validación de JSON mediante `CAN_JSON_PARSE` y transformación a `SUPER` mediante `JSON_PARSE`.
+* Materialized View `sensor_stream_typed` para extraer y convertir los campos del evento a tipos SQL.
+* Mantenimiento incremental validado en ambas Materialized Views.
+* View `sensor_stream_ready` como capa analítica final para los datos calientes.
+* External Schema `lakehouse_ext` conectado con AWS Glue Data Catalog.
+* Consulta de la tabla Apache Iceberg `sensor_metrics` desde Redshift.
+* JOIN entre datos calientes provenientes de Kinesis y métricas históricas almacenadas en Iceberg.
+* Monitoreo de Streaming Ingestion mediante `SYS_STREAM_SCAN_STATES`.
+* Medición del lag de ingesta y registros omitidos por shard.
+* Rol SQL `analytics_reader` con permisos restringidos para la capa analítica.
+* Script SQL consolidado en `redshift/streaming_ingestion.sql`.
+
 ## Estructura del proyecto
 
 ```text
@@ -122,6 +147,11 @@ Terraform-Scaffold/
 |   |   |-- outputs.tf
 |   |   `-- variables.tf
 |   |
+|   |-- redshift/
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |   `-- variables.tf
+|   |
 |   `-- network/
 |       |-- main.tf
 |       |-- outputs.tf
@@ -152,6 +182,9 @@ Terraform-Scaffold/
 |-- spark/
 |   `-- streaming_job.py
 |
+|-- redshift/
+|   `-- streaming_ingestion.sql
+|
 |-- docs/
 |   |-- evidencia-firehose-s3.png
 |   |-- evidencia-kafka.png
@@ -165,7 +198,15 @@ Terraform-Scaffold/
 |   |-- evidencia-flink-jar-s3.png
 |   |-- evidencia-glue-iceberg.png
 |   |-- evidencia-s3-iceberg.png
-|   `-- evidencia-athena-iceberg.png
+|   |-- evidencia-athena-iceberg.png
+|   |-- evidencia-redshift-streaming-raw.png
+|   |-- evidencia-redshift-ready-view.png
+|   |-- evidencia-redshift-incremental.png
+|   |-- evidencia-redshift-iceberg-query.png
+|   |-- evidencia-redshift-join-hot-historico.png
+|   |-- evidencia-redshift-lag.png
+|   |-- evidencia-redshift-seguridad.png
+|   `-- evidencia-redshift-iceberg-metadata.png
 |
 `-- scripts/
     |-- send_test_events.ps1
@@ -193,17 +234,19 @@ Esta configuración se ejecuta por separado porque el backend debe existir antes
 
 Es el punto de entrada del entorno de desarrollo.
 
-Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad, ingesta, procesamiento con Flink y almacenamiento Lakehouse.
+Desde esta carpeta se configuran el provider, el backend remoto, las variables del entorno y las llamadas a los módulos de red, identidad, ingesta, procesamiento con Flink, almacenamiento Lakehouse y analítica con Redshift Serverless.
 
 ### `modules/network`
 
 Crea la infraestructura de red:
 
 * VPC.
-* Subredes privadas.
+* Tres subredes privadas distribuidas en diferentes Availability Zones.
 * Tabla de rutas.
 * Asociaciones de las subredes.
 * Gateway Endpoint para S3.
+
+La VPC mantiene habilitados `enable_dns_support` y `enable_dns_hostnames`, necesarios para utilizar Private DNS en los Interface VPC Endpoints incorporados durante la sexta preentrega.
 
 Las subredes no asignan direcciones IP públicas automáticamente.
 
@@ -270,6 +313,42 @@ warehouse/
 
 y se entrega como output para que pueda ser utilizada por la aplicación de Apache Flink.
 
+### `modules/redshift`
+
+Contiene la infraestructura utilizada para la capa analítica de baja latencia incorporada en la sexta preentrega.
+
+El módulo crea:
+
+* Rol IAM específico para Amazon Redshift.
+* Política IAM con permisos para consumir Kinesis Data Streams.
+* Permisos de lectura sobre AWS Glue Data Catalog.
+* Permisos de lectura sobre el bucket del Lakehouse y sus objetos Iceberg.
+* Permiso `kms:Decrypt` para consumir el stream cifrado de Kinesis.
+* Security Group para Redshift Serverless.
+* Security Group para el Interface VPC Endpoint de Kinesis.
+* Interface VPC Endpoint para `kinesis-streams`.
+* Namespace de Amazon Redshift Serverless.
+* Workgroup de Amazon Redshift Serverless.
+* Límite diario de uso de compute.
+
+El Workgroup utiliza:
+
+```text
+Base capacity: 4 RPU
+Max capacity: 4 RPU
+Public access: disabled
+```
+
+El Namespace utiliza la base de datos:
+
+```text
+analytics
+```
+
+y administra la contraseña del usuario administrador mediante AWS Secrets Manager.
+
+El rol IAM asociado a Redshift permite consumir el Kinesis Data Stream directamente y consultar el catálogo y los objetos que forman parte del Lakehouse.
+
 ### `k8s`
 
 Contiene los manifiestos de Kubernetes utilizados en la tercera preentrega:
@@ -309,6 +388,30 @@ El proyecto Java utiliza Maven y su configuración se encuentra en:
 ```text
 flink/pom.xml
 ```
+
+### `redshift`
+
+Contiene el script SQL utilizado para implementar y validar Redshift Streaming Ingestion.
+
+El archivo principal es:
+
+```text
+redshift/streaming_ingestion.sql
+```
+
+El script consolida:
+
+* Creación del External Schema conectado con Kinesis.
+* Creación de las Materialized Views de streaming.
+* Validación y parseo de JSON.
+* Conversión de campos a tipos SQL.
+* Estrategia de refresh manual.
+* Validación del mantenimiento incremental.
+* Integración con AWS Glue Data Catalog.
+* Consultas sobre la tabla Iceberg.
+* JOIN entre datos calientes e históricos.
+* Consulta de monitoreo del lag de ingesta.
+* Configuración del rol SQL de analítica.
 
 ### `scripts`
 
@@ -1507,6 +1610,568 @@ Amazon Athena permite consultar directamente `lakehouse_db.sensor_metrics` y dev
 
 ![Evidencia de consulta mediante Amazon Athena](docs/evidencia-athena-iceberg.png)
 
+## Preentrega 6: analítica avanzada in-stream con Amazon Redshift
+
+La sexta etapa incorpora Amazon Redshift Serverless como capa analítica de baja latencia.
+
+El objetivo es permitir dos caminos complementarios para los mismos eventos:
+
+* Un camino caliente que consume Kinesis directamente mediante Redshift Streaming Ingestion.
+* Un camino histórico que procesa los eventos con Apache Flink y los almacena en Apache Iceberg.
+
+Redshift permite consultar ambas capas dentro de una misma sesión SQL.
+
+El flujo implementado es:
+
+```text
+                              Amazon Kinesis Data Streams
+                                         |
+                       +-----------------+-----------------+
+                       |                                   |
+                       v                                   v
+            Redshift Streaming Ingestion         AWS Managed Service
+                       |                         for Apache Flink
+                       v                                   |
+             sensor_stream_raw                            v
+                       |                         Ventanas + Agregaciones
+                       v                                   |
+            sensor_stream_typed                           v
+                       |                             Apache Iceberg
+                       v                                   |
+             sensor_stream_ready                   +------+------+
+                       |                            |             |
+                       |                            v             v
+                       |                       Amazon S3      AWS Glue
+                       |                       Parquet +      Data Catalog
+                       |                       Metadata           |
+                       |                            |             |
+                       +----------------------------+-------------+
+                                                    |
+                                                    v
+                                            Amazon Redshift
+                                                    |
+                                                    v
+                                          JOIN hot + histórico
+```
+
+### Arquitectura
+
+```mermaid
+flowchart LR
+    Producer["Productor PowerShell"]
+    Kinesis["Amazon Kinesis<br/>Data Streams"]
+    RawMV["Redshift Streaming Ingestion<br/>sensor_stream_raw"]
+    TypedMV["Materialized View<br/>sensor_stream_typed"]
+    Ready["View analítica<br/>sensor_stream_ready"]
+    Flink["AWS Managed Service<br/>for Apache Flink"]
+    Iceberg["Apache Iceberg<br/>sensor_metrics"]
+    S3["Amazon S3<br/>Parquet + Metadata"]
+    Glue["AWS Glue Data Catalog<br/>lakehouse_db"]
+    Redshift["Amazon Redshift Serverless<br/>analytics"]
+    Join["JOIN<br/>Hot + Histórico"]
+
+    Producer --> Kinesis
+    Kinesis -->|Streaming Ingestion| RawMV
+    RawMV --> TypedMV
+    TypedMV --> Ready
+    Kinesis --> Flink
+    Flink --> Iceberg
+    Iceberg --> S3
+    Iceberg --> Glue
+    Glue -->|External Schema| Redshift
+    S3 --> Redshift
+    Ready --> Join
+    Redshift --> Join
+```
+
+### Infraestructura de Amazon Redshift Serverless
+
+La infraestructura está declarada mediante Terraform dentro de:
+
+```text
+modules/redshift/
+```
+
+El módulo crea un Namespace y un Workgroup de Redshift Serverless:
+
+```text
+Namespace: realtime-data-platform-dev
+Workgroup: realtime-data-platform-dev-wg
+Database: analytics
+Base capacity: 4 RPU
+Max capacity: 4 RPU
+Publicly accessible: false
+```
+
+Para limitar costos durante las pruebas también se configura un Usage Limit diario:
+
+```text
+Usage type: serverless-compute
+Amount: 8 RPU-hours
+Period: daily
+Breach action: deactivate
+```
+
+El Workgroup se despliega en las tres subredes privadas del proyecto.
+
+Durante esta etapa se agregó la tercera subred:
+
+```text
+10.0.3.0/24
+us-east-1c
+```
+
+También se habilitaron en la VPC:
+
+```text
+enable_dns_support   = true
+enable_dns_hostnames = true
+```
+
+para permitir el uso de Private DNS en el Interface VPC Endpoint de Kinesis.
+
+### Conectividad privada con Kinesis
+
+Redshift Serverless consume el stream mediante un Interface VPC Endpoint:
+
+```text
+com.amazonaws.us-east-1.kinesis-streams
+```
+
+El endpoint utiliza las subredes privadas y un Security Group específico que acepta tráfico HTTPS desde el Security Group de Redshift.
+
+De esta forma, la comunicación entre Redshift y Kinesis puede mantenerse dentro de la red de AWS sin requerir acceso público para el Workgroup.
+
+### Rol IAM de Redshift
+
+El módulo crea:
+
+```text
+realtime-data-platform-dev-redshift-role
+```
+
+El rol es asociado al Namespace como rol IAM por defecto.
+
+Entre sus permisos se encuentran las acciones necesarias para consumir el Kinesis Data Stream:
+
+```text
+kinesis:DescribeStream
+kinesis:DescribeStreamSummary
+kinesis:GetShardIterator
+kinesis:GetRecords
+kinesis:ListShards
+kinesis:ListStreams
+```
+
+Debido a que el stream utiliza cifrado KMS mediante la clave administrada de Kinesis, el rol incluye también permiso de descifrado limitado al servicio Kinesis.
+
+Para consultar la capa Lakehouse dispone de permisos de lectura sobre:
+
+* AWS Glue Data Catalog.
+* Bucket S3 del Lakehouse.
+* Objetos almacenados dentro del warehouse de Apache Iceberg.
+
+### Streaming Ingestion desde Amazon Kinesis
+
+La configuración SQL utilizada se encuentra en:
+
+```text
+redshift/streaming_ingestion.sql
+```
+
+Redshift se conecta directamente con el stream mediante:
+
+```sql
+CREATE EXTERNAL SCHEMA kinesis_stream
+FROM KINESIS
+IAM_ROLE 'arn:aws:iam::<account-id>:role/realtime-data-platform-dev-redshift-role';
+```
+
+El stream utilizado es:
+
+```text
+realtime-data-platform-dev-stream
+```
+
+Este camino no utiliza Amazon S3 como intermediario.
+
+Los eventos de Kinesis son consumidos directamente por Redshift Streaming Ingestion.
+
+### Materialized View raw
+
+La primera Materialized View utilizada es:
+
+```text
+sensor_stream_raw
+```
+
+La vista consume directamente:
+
+```text
+kinesis_stream."realtime-data-platform-dev-stream"
+```
+
+Cada payload se valida antes de parsearse:
+
+```sql
+CASE
+    WHEN CAN_JSON_PARSE(kinesis_data)
+    THEN JSON_PARSE(kinesis_data)
+    ELSE NULL
+END AS payload
+```
+
+Los eventos que no pueden interpretarse como JSON quedan disponibles mediante:
+
+```text
+failed_payload
+```
+
+Durante las pruebas los eventos válidos fueron almacenados en `payload` y `failed_payload` permaneció en `NULL`.
+
+### Modelado del JSON
+
+Los eventos enviados contienen los campos:
+
+```text
+sensor_id
+timestamp
+temperature
+humidity
+air_quality_index
+```
+
+La Materialized View:
+
+```text
+sensor_stream_typed
+```
+
+extrae estos valores desde el tipo `SUPER` utilizado por Redshift y los convierte a tipos SQL.
+
+El resultado contiene:
+
+```text
+sensor_id              VARCHAR
+event_timestamp_raw    VARCHAR
+temperature            DECIMAL(5,2)
+humidity               DECIMAL(5,2)
+air_quality_index      INTEGER
+```
+
+El timestamp se mantiene como `VARCHAR` dentro de la Materialized View para conservar el mantenimiento incremental.
+
+La conversión final se realiza en una View convencional:
+
+```text
+sensor_stream_ready
+```
+
+utilizando:
+
+```sql
+TRY_CAST(event_timestamp_raw AS TIMESTAMPTZ)
+```
+
+De esta forma se obtiene una capa lista para consultas sin forzar recomputaciones completas de las Materialized Views.
+
+### Estrategia de refresh
+
+Durante el desarrollo se utilizó refresh manual:
+
+```sql
+REFRESH MATERIALIZED VIEW sensor_stream_raw;
+REFRESH MATERIALIZED VIEW sensor_stream_typed;
+```
+
+Esta estrategia permite controlar cuándo Redshift procesa nuevos eventos mientras se realizan pruebas y evita refrescos innecesarios.
+
+La vista de sistema:
+
+```text
+SVV_MV_INFO
+```
+
+fue utilizada para validar el estado de las Materialized Views.
+
+Durante la prueba ambas mostraron:
+
+```text
+state = 1
+```
+
+lo que confirma mantenimiento incremental.
+
+El valor:
+
+```text
+autorefresh = false
+```
+
+corresponde a la estrategia manual utilizada en este entorno de desarrollo.
+
+En un escenario productivo podría evaluarse refresco automático o una frecuencia controlada de aproximadamente 30 a 60 segundos según el SLA de latencia y el costo aceptable.
+
+### Integración con AWS Glue y Apache Iceberg
+
+Redshift también se conecta con el catálogo creado durante la quinta preentrega.
+
+El External Schema se configura mediante:
+
+```sql
+CREATE EXTERNAL SCHEMA lakehouse_ext
+FROM DATA CATALOG
+DATABASE 'lakehouse_db'
+REGION 'us-east-1'
+IAM_ROLE 'arn:aws:iam::<account-id>:role/realtime-data-platform-dev-redshift-role';
+```
+
+Una vez que Apache Flink procesa eventos y crea la tabla Iceberg, Redshift puede visualizar:
+
+```text
+lakehouse_ext.sensor_metrics
+```
+
+La tabla mantiene las columnas:
+
+```text
+sensor_id
+window_start
+window_end
+event_count
+avg_temperature
+avg_humidity
+avg_aqi
+```
+
+Esto permite consultar datos históricos almacenados en Apache Iceberg desde la misma base de datos donde se consultan los datos calientes provenientes de Kinesis.
+
+### JOIN entre datos calientes e históricos
+
+Para validar la integración se realizó una consulta que obtiene:
+
+* El evento caliente más reciente de cada sensor desde `sensor_stream_ready`.
+* La última ventana histórica disponible para cada sensor desde `lakehouse_ext.sensor_metrics`.
+
+Ambos conjuntos se combinan utilizando:
+
+```text
+sensor_id
+```
+
+El resultado permite visualizar en una misma fila valores como:
+
+```text
+hot_temperature
+hot_humidity
+hot_aqi
+historical_avg_temperature
+historical_avg_humidity
+historical_avg_aqi
+event_count
+```
+
+Durante la prueba se obtuvieron resultados para los cinco sensores:
+
+```text
+sensor-01
+sensor-02
+sensor-03
+sensor-04
+sensor-05
+```
+
+Esto valida que Redshift puede combinar el camino de baja latencia con los datos históricos almacenados en el Lakehouse.
+
+### Monitoreo del lag de ingesta
+
+La vista de sistema:
+
+```text
+SYS_STREAM_SCAN_STATES
+```
+
+se utilizó para observar el comportamiento de Streaming Ingestion.
+
+La consulta permite obtener por shard:
+
+* Registros escaneados.
+* Registros omitidos.
+* Timestamp del último registro leído.
+* Momento del scan realizado por Redshift.
+* Lag calculado en segundos.
+
+Durante una de las pruebas se observaron valores similares a:
+
+```text
+Shard 0: scanned_rows=26, skipped_rows=0
+Shard 1: scanned_rows=33, skipped_rows=0
+```
+
+El valor de `skipped_rows = 0` confirmó que no se omitieron eventos durante esos scans.
+
+El lag observado durante la evidencia fue de varios minutos debido a que el entorno estaba utilizando refresh manual. Por lo tanto, este valor incluye el tiempo transcurrido entre la generación de los eventos y la ejecución manual del siguiente refresh y no representa por sí solo la latencia mínima posible de Redshift Streaming Ingestion.
+
+### Seguridad de la capa analítica
+
+Además del rol IAM utilizado para la comunicación entre servicios, se creó dentro de Redshift el rol SQL:
+
+```text
+analytics_reader
+```
+
+El objetivo es separar los permisos administrativos de los permisos necesarios para usuarios analíticos.
+
+El rol recibió permisos acotados:
+
+* `TEMP` sobre la base `analytics`.
+* `USAGE` sobre el schema `public`.
+* `SELECT` sobre `sensor_stream_raw`.
+* `SELECT` sobre `sensor_stream_typed`.
+* `SELECT` sobre `sensor_stream_ready`.
+* `USAGE` sobre el External Schema `lakehouse_ext`.
+
+Los privilegios fueron validados mediante:
+
+```sql
+SHOW GRANTS FOR ROLE analytics_reader
+FROM DATABASE analytics;
+```
+
+De esta forma los consumidores analíticos pueden trabajar con las capas necesarias sin recibir privilegios administrativos sobre Redshift.
+
+### Metadata de Apache Iceberg
+
+Durante esta etapa se volvió a validar la metadata de la tabla Iceberg almacenada en S3.
+
+La ruta consultada fue:
+
+```text
+warehouse/lakehouse_db.db/sensor_metrics/metadata/
+```
+
+Se observaron múltiples archivos:
+
+```text
+00000-....metadata.json
+00001-....metadata.json
+00002-....metadata.json
+snap-....avro
+```
+
+Esto confirma que la tabla consultada desde Redshift mantiene la estructura de metadata, manifests y snapshots propia de Apache Iceberg.
+
+### Validación end-to-end
+
+La prueba final de la sexta etapa confirmó los dos caminos del pipeline:
+
+```text
+CAMINO HOT
+
+Kinesis
+   |
+   v
+Redshift Streaming Ingestion
+   |
+   v
+sensor_stream_raw
+   |
+   v
+sensor_stream_typed
+   |
+   v
+sensor_stream_ready
+
+CAMINO HISTÓRICO
+
+Kinesis
+   |
+   v
+Apache Flink
+   |
+   v
+Apache Iceberg
+   |
+   +--> Amazon S3
+   |
+   `--> AWS Glue Data Catalog
+
+INTEGRACIÓN
+
+sensor_stream_ready
+        |
+        +---- JOIN por sensor_id ----+
+                                    |
+                                    v
+                    lakehouse_ext.sensor_metrics
+```
+
+La prueba confirmó:
+
+* Ingesta directa de Kinesis a Redshift sin S3 intermedio.
+* Validación y parseo correcto de eventos JSON.
+* Conversión a tipos SQL.
+* Materialized Views con mantenimiento incremental.
+* Consulta de datos calientes desde Redshift.
+* Consulta de Apache Iceberg mediante AWS Glue Data Catalog.
+* Consulta de metadata y snapshots Iceberg almacenados en S3.
+* JOIN entre datos calientes e históricos.
+* Monitoreo del lag por shard.
+* Ausencia de registros omitidos durante el scan observado.
+* Acceso analítico mediante un rol SQL de permisos restringidos.
+
+### Evidencias de la Preentrega 6
+
+#### Streaming Ingestion desde Kinesis
+
+La evidencia muestra los eventos consumidos directamente por `sensor_stream_raw`.
+
+Los payloads JSON fueron interpretados correctamente y `failed_payload` permanece vacío para los registros válidos.
+
+![Evidencia de Redshift Streaming Ingestion](docs/evidencia-redshift-streaming-raw.png)
+
+#### Vista analítica de datos calientes
+
+La View `sensor_stream_ready` expone los datos del stream mediante columnas SQL listas para consulta.
+
+![Evidencia de la vista analítica de Redshift](docs/evidencia-redshift-ready-view.png)
+
+#### Mantenimiento incremental de Materialized Views
+
+La vista `SVV_MV_INFO` confirma `state = 1` para las Materialized Views `sensor_stream_raw` y `sensor_stream_typed`.
+
+![Evidencia de Materialized Views incrementales](docs/evidencia-redshift-incremental.png)
+
+#### Consulta de Apache Iceberg desde Redshift
+
+Redshift consulta directamente la tabla externa `lakehouse_ext.sensor_metrics`, registrada mediante AWS Glue Data Catalog.
+
+![Evidencia de Iceberg consultado desde Redshift](docs/evidencia-redshift-iceberg-query.png)
+
+#### JOIN entre datos calientes e históricos
+
+La consulta combina el evento más reciente de cada sensor con su última ventana agregada almacenada en Apache Iceberg.
+
+![Evidencia del JOIN hot e histórico](docs/evidencia-redshift-join-hot-historico.png)
+
+#### Monitoreo del lag de ingesta
+
+`SYS_STREAM_SCAN_STATES` permite visualizar los registros procesados y omitidos y calcular el lag observado para cada shard.
+
+![Evidencia de monitoreo del lag](docs/evidencia-redshift-lag.png)
+
+#### Seguridad de la capa analítica
+
+Los grants del rol `analytics_reader` muestran los permisos acotados otorgados para consumir la capa analítica.
+
+![Evidencia del rol analítico](docs/evidencia-redshift-seguridad.png)
+
+#### Metadata de Apache Iceberg
+
+La evidencia muestra las versiones de `metadata.json`, manifests y snapshots almacenados en S3 para la tabla `sensor_metrics`.
+
+![Evidencia de metadata Iceberg utilizada por Redshift](docs/evidencia-redshift-iceberg-metadata.png)
+
 ### Limpieza de recursos
 
 Una vez finalizadas las pruebas, la aplicación puede detenerse mediante:
@@ -1515,7 +2180,7 @@ Una vez finalizadas las pruebas, la aplicación puede detenerse mediante:
 aws kinesisanalyticsv2 stop-application --application-name realtime-data-platform-dev-flink --region us-east-1
 ```
 
-Para evitar costos innecesarios, los recursos administrados por el entorno de desarrollo pueden eliminarse desde:
+Para evitar costos innecesarios, los recursos administrados por el entorno de desarrollo, incluyendo Redshift Serverless y el Interface VPC Endpoint de Kinesis, pueden eliminarse desde:
 
 ```text
 environments/dev
