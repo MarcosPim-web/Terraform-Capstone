@@ -43,7 +43,7 @@
 
 CREATE EXTERNAL SCHEMA kinesis_stream
 FROM KINESIS
-IAM_ROLE 'arn:aws:iam::706258268830:role/realtime-data-platform-dev-redshift-role';
+IAM_ROLE default;
 
 
 -- =============================================================================
@@ -182,7 +182,7 @@ CREATE EXTERNAL SCHEMA lakehouse_ext
 FROM DATA CATALOG
 DATABASE 'lakehouse_db'
 REGION 'us-east-1'
-IAM_ROLE 'arn:aws:iam::706258268830:role/realtime-data-platform-dev-redshift-role';
+IAM_ROLE default;
 
 
 -- =============================================================================
