@@ -56,7 +56,7 @@ module "flink" {
   glue_database_name     = module.lakehouse.glue_database_name
   iceberg_warehouse_path = module.lakehouse.warehouse_path
 
-  jar_path = "${path.root}/../../flink/target/realtime-flink-processing-1.0.0.jar"
+  jar_path = "${path.root}/../../../flink/target/realtime-flink-processing-1.0.0.jar"
 }
 
 module "redshift" {
