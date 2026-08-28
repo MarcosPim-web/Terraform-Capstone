@@ -1,11 +1,11 @@
-# Validaci?n End-to-End
+# Validación End-to-End
 
 ## Fecha
 27 de agosto de 2026
 
 ## Arquitectura validada
 
-La prueba E2E valid? los dos caminos que consumen el mismo stream de Amazon Kinesis:
+La prueba E2E validó los dos caminos que consumen el mismo stream de Amazon Kinesis:
 
 - Hot path: Producer -> Kinesis -> Redshift Serverless
 - Historical path: Producer -> Kinesis -> Flink -> Apache Iceberg -> S3 / Glue
@@ -25,8 +25,8 @@ Redshift obtuvo:
 - Eventos: 100
 - Sensores: 5
 
-### Camino hist?rico
-Flink proces? los mismos eventos mediante Event Time, Watermarks y ventanas de un minuto.
+### Camino histórico
+Flink procesó los mismos eventos mediante Event Time, Watermarks y ventanas de un minuto.
 
 Iceberg produjo:
 - Ventanas: 15
@@ -36,20 +36,20 @@ Iceberg produjo:
 Se verificaron archivos Parquet, metadata, manifests y snapshots Iceberg en S3, y la tabla `lakehouse_db.sensor_metrics` en AWS Glue.
 
 ### Consistencia
-Comparaci?n Redshift vs Iceberg:
+Comparación Redshift vs Iceberg:
 
 - Ventanas comparadas: 15
 - Eventos Redshift: 100
 - Eventos Iceberg: 100
 - Diferencias de conteo: 0
-- Diferencias en promedios: ?nicamente precisi?n de punto flotante.
+- Diferencias en promedios: únicamente precisión de punto flotante.
 
 ### Observabilidad
 - Kinesis IteratorAgeMilliseconds: 0
 - Flink failed checkpoints: 0
-- Duraci?n observada de checkpoints: aproximadamente 190-363 ms
+- Duración observada de checkpoints: aproximadamente 190-363 ms
 
-## Conclusi?n
+## Conclusión
 
 La arquitectura actual fue validada satisfactoriamente de extremo a extremo.
 
@@ -57,8 +57,8 @@ Ambos caminos procesaron consistentemente el lote original de 100 eventos y prod
 
 ## Limpieza
 
-Despu?s de la prueba:
+Después de la prueba:
 
 - Flink fue detenido correctamente.
-- Terraform destroy elimin? los 48 recursos.
-- El repositorio qued? limpio antes de documentar los resultados.
+- Terraform destroy eliminó los 48 recursos.
+- El repositorio quedó limpio antes de documentar los resultados.
